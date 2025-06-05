@@ -547,48 +547,114 @@ class GK8DocAnalyzer:
             return None
     
     def find_single_source_candidates(self):
-        """Use AI to find content that should be single-sourced"""
+        """Use AI to find content that should be single-sourced - with hash-based prefiltering"""
         console.print("\n[yellow]Finding single-source candidates...[/yellow]")
         
-        candidates = []
+        # Step 1: Create content hashes for quick comparison
+        console.print("[dim]Step 1: Creating content hashes for prefiltering...[/dim]")
+        page_hashes = {}
+        for i, page in enumerate(self.content_data):
+            # Create multiple hashes for different content segments
+            content = page['content'].lower()
+            page_hashes[i] = {
+                'url': page['url'],
+                'space': page['space'],
+                'full_hash': hashlib.md5(content.encode()).hexdigest(),
+                'first_1k_hash': hashlib.md5(content[:1000].encode()).hexdigest(),
+                'first_500_hash': hashlib.md5(content[:500].encode()).hexdigest(),
+                'word_set': set(content.split()[:200]),  # First 200 words
+                'content_length': len(content)
+            }
+        
+        # Step 2: Find potentially similar pages using hashes
+        console.print("[dim]Step 2: Identifying potentially similar pages...[/dim]")
+        potential_pairs = []
         total_pages = len(self.content_data)
-        total_comparisons = (total_pages * (total_pages - 1)) // 2  # n*(n-1)/2 combinations
-        comparisons_done = 0
         
-        # Group content by similarity
-        with console.status("[bold green]Analyzing content for similarities...") as status:
-            for i, page1 in enumerate(self.content_data):
-                status.update(f"[bold green]Analyzing page {i+1}/{total_pages}: {page1['url'].split('/')[-1][:30]}...")
+        for i in range(total_pages):
+            for j in range(i + 1, total_pages):
+                page1_hash = page_hashes[i]
+                page2_hash = page_hashes[j]
                 
-                for page2 in self.content_data[i+1:]:
-                    comparisons_done += 1
-                    if comparisons_done % 50 == 0:  # Update every 50 comparisons
-                        progress_pct = int((comparisons_done / total_comparisons) * 100)
-                        status.update(f"[bold green]Comparing content... {comparisons_done}/{total_comparisons} ({progress_pct}%)")
-                    
-                    if page1['space'] != page2['space']:  # Cross-space comparison
-                        prompt = f"""
-                        Compare these two documentation sections and identify if they contain 
-                        similar content that could be single-sourced. Look for:
-                        - Installation instructions
-                        - Configuration steps
-                        - API examples
-                        - Troubleshooting guides
-                        
-                        Section 1 (from {page1['space']}): {page1['content'][:1000]}
-                        Section 2 (from {page2['space']}): {page2['content'][:1000]}
-                        
-                        If similar, explain what could be consolidated and estimate similarity percentage.
-                        """
-                        
-                        analysis = self.analyze_with_ollama(prompt, "")
-                        if analysis and "similar" in analysis.lower():
-                            candidates.append({
-                                'page1': page1['url'],
-                                'page2': page2['url'],
-                            'analysis': analysis
-                        })
+                # Skip if same space (we want cross-space comparisons)
+                if page1_hash['space'] == page2_hash['space']:
+                    continue
+                
+                # Calculate similarity metrics
+                similarity_score = 0
+                
+                # Check exact matches (rare but fast)
+                if page1_hash['full_hash'] == page2_hash['full_hash']:
+                    similarity_score = 100
+                elif page1_hash['first_1k_hash'] == page2_hash['first_1k_hash']:
+                    similarity_score = 80
+                elif page1_hash['first_500_hash'] == page2_hash['first_500_hash']:
+                    similarity_score = 60
+                else:
+                    # Check word overlap (Jaccard similarity)
+                    word_overlap = len(page1_hash['word_set'] & page2_hash['word_set'])
+                    word_union = len(page1_hash['word_set'] | page2_hash['word_set'])
+                    if word_union > 0:
+                        jaccard = word_overlap / word_union
+                        if jaccard > 0.3:  # 30% word overlap threshold
+                            similarity_score = int(jaccard * 50)
+                
+                # Check similar content length (within 20%)
+                length_ratio = min(page1_hash['content_length'], page2_hash['content_length']) / max(page1_hash['content_length'], page2_hash['content_length'])
+                if length_ratio > 0.8:
+                    similarity_score += 10
+                
+                # Add to potential pairs if similarity is notable
+                if similarity_score >= 25:  # Threshold for AI analysis
+                    potential_pairs.append((i, j, similarity_score))
         
+        # Sort by similarity score (highest first)
+        potential_pairs.sort(key=lambda x: x[2], reverse=True)
+        
+        console.print(f"[green]Found {len(potential_pairs)} potentially similar page pairs out of {total_pages * (total_pages - 1) // 2} total[/green]")
+        console.print(f"[green]Reduction: {100 - (len(potential_pairs) * 100 // (total_pages * (total_pages - 1) // 2)):.1f}% fewer AI calls needed[/green]")
+        
+        # Step 3: AI analysis only on promising pairs
+        candidates = []
+        ai_calls_made = 0
+        
+        with console.status("[bold green]Analyzing similar content pairs with AI...") as status:
+            for idx, (i, j, score) in enumerate(potential_pairs):
+                page1 = self.content_data[i]
+                page2 = self.content_data[j]
+                
+                status.update(f"[bold green]AI Analysis {idx+1}/{len(potential_pairs)} (similarity score: {score})")
+                
+                prompt = f"""
+                Compare these two documentation sections and identify if they contain 
+                similar content that could be single-sourced. Look for:
+                - Installation instructions
+                - Configuration steps
+                - API examples
+                - Troubleshooting guides
+                
+                Section 1 (from {page1['space']}): {page1['content'][:1000]}
+                Section 2 (from {page2['space']}): {page2['content'][:1000]}
+                
+                If similar, explain what could be consolidated and estimate similarity percentage.
+                """
+                
+                analysis = self.analyze_with_ollama(prompt, "")
+                ai_calls_made += 1
+                
+                if analysis and "similar" in analysis.lower():
+                    candidates.append({
+                        'page1': page1['url'],
+                        'page2': page2['url'],
+                        'hash_similarity': score,
+                        'analysis': analysis
+                    })
+                
+                # Update progress
+                if ai_calls_made % 10 == 0:
+                    console.print(f"[dim]Progress: {ai_calls_made} AI analyses complete, {len(candidates)} candidates found[/dim]")
+        
+        console.print(f"\n[green]Analysis complete! Made {ai_calls_made} AI calls instead of {total_pages * (total_pages - 1) // 2}[/green]")
         return candidates
     
     def find_variable_candidates(self):
