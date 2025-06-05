@@ -546,97 +546,238 @@ class GK8DocAnalyzer:
             console.print(f"[red]Vision analysis error:[/red] {e}")
             return None
     
+    def _extract_sections(self, content):
+        """Extract sections based on common markdown/HTML headers"""
+        sections = []
+        
+        # Common header patterns
+        header_patterns = [
+            r'^#{1,6}\s+(.+)$',  # Markdown headers
+            r'^(.+)\n[=-]+$',     # Markdown underline headers
+            r'<h[1-6][^>]*>(.+?)</h[1-6]>',  # HTML headers
+            r'^(?:Installation|Configuration|Setup|Usage|Example|API|Reference|Getting Started|Prerequisites|Requirements|Troubleshooting).*$'  # Common section names
+        ]
+        
+        lines = content.split('\n')
+        current_section = {'start': 0, 'content': '', 'header': ''}
+        current_pos = 0
+        
+        for i, line in enumerate(lines):
+            current_pos += len(line) + 1  # +1 for newline
+            
+            # Check if this line is a header
+            is_header = False
+            header_text = ''
+            
+            for pattern in header_patterns:
+                match = re.match(pattern, line.strip(), re.IGNORECASE | re.MULTILINE)
+                if match:
+                    is_header = True
+                    header_text = match.group(1) if match.groups() else line.strip()
+                    break
+            
+            if is_header and current_section['content'].strip():
+                # Save previous section
+                sections.append(current_section)
+                # Start new section
+                current_section = {
+                    'start': current_pos,
+                    'content': '',
+                    'header': header_text
+                }
+            else:
+                current_section['content'] += line + '\n'
+        
+        # Add final section
+        if current_section['content'].strip():
+            sections.append(current_section)
+        
+        return sections
+    
     def find_single_source_candidates(self):
-        """Use AI to find content that should be single-sourced - with hash-based prefiltering"""
+        """Use AI to find content that should be single-sourced - with sliding window hash prefiltering"""
         console.print("\n[yellow]Finding single-source candidates...[/yellow]")
         
-        # Step 1: Create content hashes for quick comparison
-        console.print("[dim]Step 1: Creating content hashes for prefiltering...[/dim]")
-        page_hashes = {}
+        # Step 1: Create sliding window hashes for each page
+        console.print("[dim]Step 1: Creating sliding window hashes for deep content comparison...[/dim]")
+        
+        WINDOW_SIZE = 500  # Characters per window
+        STEP_SIZE = 250    # Overlap between windows
+        MIN_WINDOW_WORDS = 50  # Minimum words in a window to consider
+        
+        page_windows = {}
+        
         for i, page in enumerate(self.content_data):
-            # Create multiple hashes for different content segments
             content = page['content'].lower()
-            page_hashes[i] = {
+            windows = []
+            
+            # Extract meaningful sections using headers as hints
+            sections = self._extract_sections(page['content'])
+            
+            # Create windows for full content
+            for start in range(0, len(content) - WINDOW_SIZE + 1, STEP_SIZE):
+                window_text = content[start:start + WINDOW_SIZE]
+                word_count = len(window_text.split())
+                
+                if word_count >= MIN_WINDOW_WORDS:
+                    window_hash = hashlib.md5(window_text.encode()).hexdigest()[:16]  # Shorter hash
+                    windows.append({
+                        'hash': window_hash,
+                        'start': start,
+                        'text': window_text,
+                        'words': set(window_text.split()[:50])  # First 50 words for quick comparison
+                    })
+            
+            # Also hash each section independently
+            for section in sections:
+                if len(section['content']) > 100:  # Meaningful section
+                    section_hash = hashlib.md5(section['content'].lower().encode()).hexdigest()[:16]
+                    windows.append({
+                        'hash': section_hash,
+                        'start': section['start'],
+                        'text': section['content'].lower(),
+                        'words': set(section['content'].lower().split()[:50]),
+                        'is_section': True,
+                        'header': section.get('header', '')
+                    })
+            
+            page_windows[i] = {
                 'url': page['url'],
                 'space': page['space'],
-                'full_hash': hashlib.md5(content.encode()).hexdigest(),
-                'first_1k_hash': hashlib.md5(content[:1000].encode()).hexdigest(),
-                'first_500_hash': hashlib.md5(content[:500].encode()).hexdigest(),
-                'word_set': set(content.split()[:200]),  # First 200 words
+                'windows': windows,
                 'content_length': len(content)
             }
+            
+            if (i + 1) % 50 == 0:
+                console.print(f"[dim]Processed {i + 1}/{len(self.content_data)} pages...[/dim]")
         
-        # Step 2: Find potentially similar pages using hashes
-        console.print("[dim]Step 2: Identifying potentially similar pages...[/dim]")
-        potential_pairs = []
+        # Step 2: Find matching windows between pages
+        console.print("[dim]Step 2: Finding matching content windows across pages...[/dim]")
+        
+        # Build hash lookup for fast comparison
+        window_lookup = defaultdict(list)
+        for page_idx, page_data in page_windows.items():
+            for window in page_data['windows']:
+                window_lookup[window['hash']].append({
+                    'page_idx': page_idx,
+                    'window': window,
+                    'url': page_data['url'],
+                    'space': page_data['space']
+                })
+        
+        # Find pages with matching windows
+        page_pair_matches = defaultdict(lambda: {'matches': 0, 'sections': []})
         total_pages = len(self.content_data)
         
-        for i in range(total_pages):
-            for j in range(i + 1, total_pages):
-                page1_hash = page_hashes[i]
-                page2_hash = page_hashes[j]
+        for hash_val, occurrences in window_lookup.items():
+            if len(occurrences) < 2:
+                continue
                 
-                # Skip if same space (we want cross-space comparisons)
-                if page1_hash['space'] == page2_hash['space']:
-                    continue
-                
-                # Calculate similarity metrics
-                similarity_score = 0
-                
-                # Check exact matches (rare but fast)
-                if page1_hash['full_hash'] == page2_hash['full_hash']:
-                    similarity_score = 100
-                elif page1_hash['first_1k_hash'] == page2_hash['first_1k_hash']:
-                    similarity_score = 80
-                elif page1_hash['first_500_hash'] == page2_hash['first_500_hash']:
-                    similarity_score = 60
-                else:
-                    # Check word overlap (Jaccard similarity)
-                    word_overlap = len(page1_hash['word_set'] & page2_hash['word_set'])
-                    word_union = len(page1_hash['word_set'] | page2_hash['word_set'])
-                    if word_union > 0:
-                        jaccard = word_overlap / word_union
-                        if jaccard > 0.3:  # 30% word overlap threshold
-                            similarity_score = int(jaccard * 50)
-                
-                # Check similar content length (within 20%)
-                length_ratio = min(page1_hash['content_length'], page2_hash['content_length']) / max(page1_hash['content_length'], page2_hash['content_length'])
-                if length_ratio > 0.8:
-                    similarity_score += 10
-                
-                # Add to potential pairs if similarity is notable
-                if similarity_score >= 25:  # Threshold for AI analysis
-                    potential_pairs.append((i, j, similarity_score))
+            # Check each pair of pages with this matching window
+            for i in range(len(occurrences)):
+                for j in range(i + 1, len(occurrences)):
+                    page1 = occurrences[i]
+                    page2 = occurrences[j]
+                    
+                    # Skip if same space
+                    if page1['space'] == page2['space']:
+                        continue
+                    
+                    # Create consistent pair key
+                    pair_key = tuple(sorted([page1['page_idx'], page2['page_idx']]))
+                    
+                    # Track this match
+                    page_pair_matches[pair_key]['matches'] += 1
+                    
+                    # Track section matches specially
+                    if page1['window'].get('is_section') or page2['window'].get('is_section'):
+                        section_info = {
+                            'hash': hash_val,
+                            'header1': page1['window'].get('header', ''),
+                            'header2': page2['window'].get('header', ''),
+                            'preview': page1['window']['text'][:100]
+                        }
+                        page_pair_matches[pair_key]['sections'].append(section_info)
+        
+        # Convert to sorted list of potential pairs
+        potential_pairs = []
+        for (idx1, idx2), match_data in page_pair_matches.items():
+            # Calculate similarity score based on matches
+            match_count = match_data['matches']
+            section_matches = len(match_data['sections'])
+            
+            # Higher weight for section matches
+            similarity_score = min(100, match_count * 5 + section_matches * 20)
+            
+            if similarity_score >= 20:  # Lower threshold for window-based matching
+                potential_pairs.append({
+                    'indices': (idx1, idx2),
+                    'score': similarity_score,
+                    'window_matches': match_count,
+                    'section_matches': section_matches,
+                    'matched_sections': match_data['sections'][:3]  # Keep top 3 for reference
+                })
         
         # Sort by similarity score (highest first)
-        potential_pairs.sort(key=lambda x: x[2], reverse=True)
+        potential_pairs.sort(key=lambda x: x['score'], reverse=True)
         
         console.print(f"[green]Found {len(potential_pairs)} potentially similar page pairs out of {total_pages * (total_pages - 1) // 2} total[/green]")
         console.print(f"[green]Reduction: {100 - (len(potential_pairs) * 100 // (total_pages * (total_pages - 1) // 2)):.1f}% fewer AI calls needed[/green]")
+        
+        # Show some example matches
+        if potential_pairs and self.debug:
+            console.print("\n[dim]Top matching pairs:[/dim]")
+            for pair in potential_pairs[:3]:
+                idx1, idx2 = pair['indices']
+                console.print(f"[dim]- {self.content_data[idx1]['url'].split('/')[-1]} <-> {self.content_data[idx2]['url'].split('/')[-1]}[/dim]")
+                console.print(f"[dim]  Score: {pair['score']}, Windows: {pair['window_matches']}, Sections: {pair['section_matches']}[/dim]")
+                if pair['matched_sections']:
+                    console.print(f"[dim]  Matched section: {pair['matched_sections'][0]['header1'] or 'content'}[/dim]")
         
         # Step 3: AI analysis only on promising pairs
         candidates = []
         ai_calls_made = 0
         
         with console.status("[bold green]Analyzing similar content pairs with AI...") as status:
-            for idx, (i, j, score) in enumerate(potential_pairs):
-                page1 = self.content_data[i]
-                page2 = self.content_data[j]
+            for idx, pair in enumerate(potential_pairs):
+                idx1, idx2 = pair['indices']
+                page1 = self.content_data[idx1]
+                page2 = self.content_data[idx2]
                 
-                status.update(f"[bold green]AI Analysis {idx+1}/{len(potential_pairs)} (similarity score: {score})")
+                status.update(f"[bold green]AI Analysis {idx+1}/{len(potential_pairs)} (score: {pair['score']}, matches: {pair['window_matches']})")
                 
+                # Build context-aware prompt
                 prompt = f"""
                 Compare these two documentation sections and identify if they contain 
-                similar content that could be single-sourced. Look for:
+                similar content that could be single-sourced. 
+                
+                IMPORTANT: These pages have {pair['window_matches']} matching content windows"""
+                
+                if pair['section_matches'] > 0:
+                    prompt += f" and {pair['section_matches']} matching sections"
+                    if pair['matched_sections']:
+                        prompt += f" including: {', '.join(s['header1'] or s['preview'][:30] for s in pair['matched_sections'][:2])}"
+                
+                prompt += f"""
+                
+                Look for:
                 - Installation instructions
                 - Configuration steps
                 - API examples
+                - Code snippets
+                - Step-by-step procedures
                 - Troubleshooting guides
                 
-                Section 1 (from {page1['space']}): {page1['content'][:1000]}
-                Section 2 (from {page2['space']}): {page2['content'][:1000]}
+                Page 1 ({page1['space']}): {page1['url']}
+                Content sample: {page1['content'][:1000]}
                 
-                If similar, explain what could be consolidated and estimate similarity percentage.
+                Page 2 ({page2['space']}): {page2['url']}
+                Content sample: {page2['content'][:1000]}
+                
+                If similar content exists, explain:
+                1. What specific sections/content could be consolidated
+                2. Estimated overlap percentage
+                3. Which parts are identical vs slightly different
                 """
                 
                 analysis = self.analyze_with_ollama(prompt, "")
@@ -646,7 +787,10 @@ class GK8DocAnalyzer:
                     candidates.append({
                         'page1': page1['url'],
                         'page2': page2['url'],
-                        'hash_similarity': score,
+                        'similarity_score': pair['score'],
+                        'window_matches': pair['window_matches'],
+                        'section_matches': pair['section_matches'],
+                        'matched_sections': pair['matched_sections'],
                         'analysis': analysis
                     })
                 
@@ -655,6 +799,8 @@ class GK8DocAnalyzer:
                     console.print(f"[dim]Progress: {ai_calls_made} AI analyses complete, {len(candidates)} candidates found[/dim]")
         
         console.print(f"\n[green]Analysis complete! Made {ai_calls_made} AI calls instead of {total_pages * (total_pages - 1) // 2}[/green]")
+        console.print(f"[green]Found {len(candidates)} single-sourcing opportunities[/green]")
+        
         return candidates
     
     def find_variable_candidates(self):
