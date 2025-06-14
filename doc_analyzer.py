@@ -20,13 +20,13 @@ from datetime import datetime
 
 console = Console()
 
-class GK8DocAnalyzer:
+class DocAnalyzer:
     def __init__(self, jwt_token, ollama_model="llama3.2-vision:11b", debug=False):
         self.jwt_token = jwt_token
-        self.base_url = "https://docs.gk8.io"
+        self.base_url = ""  # Will be set from first URL
         self.headers = {
             "Authorization": f"Bearer {jwt_token}",
-            "User-Agent": "GK8-Doc-Analyzer/1.0"
+            "User-Agent": "Doc-Analyzer/1.0"
         }
         self.visited_urls = set()
         self.content_data = []
@@ -79,7 +79,9 @@ class GK8DocAnalyzer:
             console.print("[dim]Authenticating with JWT...[/dim]")
             
             # Initial authentication request with JWT and reload parameter
-            auth_url = f"https://docs.gk8.io?jwt={self.jwt_token}&reload"
+            # Use the base URL if set, otherwise use a placeholder
+            base = self.base_url if self.base_url else "https://docs.example.com"
+            auth_url = f"{base}?jwt={self.jwt_token}&reload"
             self.page.goto(auth_url)
             
             # Wait for authentication to complete and page to load
@@ -210,7 +212,7 @@ class GK8DocAnalyzer:
             return False
         
         # Must be within our base domain
-        if not normalized_url.startswith(self.base_url):
+        if self.base_url and not normalized_url.startswith(self.base_url):
             return False
         
         # Check exclude patterns
@@ -436,6 +438,12 @@ class GK8DocAnalyzer:
         """Crawl all pages using breadth-first search to ensure complete coverage"""
         # Record start time
         start_time = datetime.now()
+        
+        # Set base URL from first URL if not already set
+        if not self.base_url and start_urls:
+            parsed = urlparse(start_urls[0])
+            self.base_url = f"{parsed.scheme}://{parsed.netloc}"
+            console.print(f"[dim]Base URL set to: {self.base_url}[/dim]")
         
         # Normalize start URLs
         normalized_starts = [self.normalize_url(url) for url in start_urls]
@@ -1001,12 +1009,12 @@ class GK8DocAnalyzer:
         }
         
         # Save report
-        with open("gk8_doc_analysis.json", "w") as f:
+        with open("doc_analysis.json", "w") as f:
             json.dump(report, f, indent=2)
         
         # Create human-readable summary
-        with open("gk8_doc_summary.md", "w") as f:
-            f.write("# GK8 Documentation Analysis Report\n\n")
+        with open("doc_summary.md", "w") as f:
+            f.write("# Documentation Analysis Report\n\n")
             f.write(f"## Summary\n")
             f.write(f"- Total pages analyzed: {report['summary']['total_pages']}\n")
             f.write(f"- Spaces: {', '.join(report['summary']['spaces_analyzed'])}\n")
@@ -1097,7 +1105,7 @@ class GK8DocAnalyzer:
             else:
                 f.write("\nNo Mermaid diagrams found in the documentation.\n")
         
-        console.print("[green]Report saved to gk8_doc_analysis.json and gk8_doc_summary.md[/green]")
+        console.print("[green]Report saved to doc_analysis.json and doc_summary.md[/green]")
 
 def main():
     """Main function that runs the entire analysis"""
@@ -1109,13 +1117,13 @@ def main():
     
     # Initialize analyzer with Llama 3.2 Vision
     console.print("[blue]Initializing analyzer with Llama 3.2 Vision...[/blue]")
-    analyzer = GK8DocAnalyzer(JWT_TOKEN, ollama_model="llama3.2-vision:11b", debug=debug_mode)
+    analyzer = DocAnalyzer(JWT_TOKEN, ollama_model="llama3.2-vision:11b", debug=debug_mode)
     
     # Get URLs to crawl
     console.print("\n[yellow]Enter URLs to crawl (one per line, empty line to finish):[/yellow]")
     console.print("[dim]Default URLs if none provided:[/dim]")
-    console.print("[dim]  - https://docs.gk8.io[/dim]")
-    console.print("[dim]  - https://docs.gk8.io/api-v15[/dim]")
+    console.print("[dim]  - https://docs.example.com[/dim]")
+    console.print("[dim]  - https://docs.example.com/api/v2[/dim]")
     
     start_urls = []
     while True:
@@ -1130,12 +1138,13 @@ def main():
     # Use default URLs if none provided
     if not start_urls:
         start_urls = [
-            "https://docs.gk8.io",  # General space
-            "https://docs.gk8.io/api-v15"  # API v15 space
+            # You should provide your documentation URLs
         ]
+        console.print("[red]No URLs provided. Please enter at least one URL to analyze.[/red]")
+        return
         console.print("\n[dim]Using default URLs.[/dim]")
     
-    console.print("[green]Starting GK8 documentation analysis...[/green]")
+    console.print("[green]Starting documentation analysis...[/green]")
     console.print(f"[yellow]Using model:[/yellow] llama3.2-vision:11b with 8K context")
     console.print(f"[yellow]Debug mode:[/yellow] {'Enabled' if debug_mode else 'Disabled'}")
     console.print(f"[yellow]Targeting:[/yellow]")
@@ -1152,8 +1161,8 @@ def main():
     
     console.print("\n[green]Analysis complete![/green]")
     console.print("Check these files for results:")
-    console.print("  - gk8_doc_analysis.json (detailed data)")
-    console.print("  - gk8_doc_summary.md (human-readable report)")
+    console.print("  - doc_analysis.json (detailed data)")
+    console.print("  - doc_summary.md (human-readable report)")
 
 
 # This is the entry point when running the script

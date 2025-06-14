@@ -17,14 +17,14 @@ import yaml
 
 console = Console()
 
-class GK8RagProcessor:
+class RagProcessor:
     def __init__(self, jwt_token, output_dir="rag_output", 
                  chunk_size_target=1000, debug=False):
         self.jwt_token = jwt_token
-        self.base_url = "https://docs.gk8.io"
+        self.base_url = ""  # Will be set from first URL
         self.headers = {
             "Authorization": f"Bearer {jwt_token}",
-            "User-Agent": "GK8-RAG-Processor/1.0"
+            "User-Agent": "RAG-Processor/1.0"
         }
         self.visited_urls = set()
         self.content_data = []
@@ -104,7 +104,9 @@ class GK8RagProcessor:
             console.print("[dim]Authenticating with JWT...[/dim]")
             
             # Initial authentication request with JWT and reload parameter
-            auth_url = f"https://docs.gk8.io?jwt={self.jwt_token}&reload"
+            # Use the base URL if set, otherwise use a placeholder
+            base = self.base_url if self.base_url else "https://docs.example.com"
+            auth_url = f"{base}?jwt={self.jwt_token}&reload"
             self.page.goto(auth_url)
             
             # Wait for authentication to complete and page to load
@@ -217,7 +219,7 @@ class GK8RagProcessor:
             return False
         
         # Must be within our base domain
-        if not normalized_url.startswith(self.base_url):
+        if self.base_url and not normalized_url.startswith(self.base_url):
             return False
         
         # Check exclude patterns
@@ -335,6 +337,12 @@ class GK8RagProcessor:
         """Crawl all pages using breadth-first search to ensure complete coverage"""
         # Record start time
         start_time = datetime.now()
+        
+        # Set base URL from first URL if not already set
+        if not self.base_url and start_urls:
+            parsed = urlparse(start_urls[0])
+            self.base_url = f"{parsed.scheme}://{parsed.netloc}"
+            console.print(f"[dim]Base URL set to: {self.base_url}[/dim]")
         
         # Normalize start URLs
         normalized_starts = [self.normalize_url(url) for url in start_urls]
@@ -793,13 +801,13 @@ def main():
     
     # Initialize processor
     console.print("[blue]Initializing RAG processor...[/blue]")
-    processor = GK8RagProcessor(JWT_TOKEN, output_dir=output_dir, debug=debug_mode)
+    processor = RagProcessor(JWT_TOKEN, output_dir=output_dir, debug=debug_mode)
     
     # Get URLs to crawl
     console.print("\n[yellow]Enter URLs to crawl (one per line, empty line to finish):[/yellow]")
     console.print("[dim]Default URLs if none provided:[/dim]")
-    console.print("[dim]  - https://docs.gk8.io[/dim]")
-    console.print("[dim]  - https://docs.gk8.io/api-v15[/dim]")
+    console.print("[dim]  - https://docs.example.com[/dim]")
+    console.print("[dim]  - https://docs.example.com/api/v2[/dim]")
     
     start_urls = []
     while True:
@@ -814,12 +822,13 @@ def main():
     # Use default URLs if none provided
     if not start_urls:
         start_urls = [
-            "https://docs.gk8.io",  # General space
-            "https://docs.gk8.io/api-v15"  # API v15 space
+            # You should provide your documentation URLs
         ]
+        console.print("[red]No URLs provided. Please enter at least one URL to process.[/red]")
+        return
         console.print("\n[dim]Using default URLs.[/dim]")
     
-    console.print("[green]Starting GK8 RAG document processing...[/green]")
+    console.print("[green]Starting RAG document processing...[/green]")
     console.print(f"[yellow]Output directory:[/yellow] {output_dir}")
     console.print(f"[yellow]Debug mode:[/yellow] {'Enabled' if debug_mode else 'Disabled'}")
     console.print(f"[yellow]Targeting:[/yellow]")

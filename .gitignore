@@ -73,5 +73,5 @@ dmypy.json
 output/
 temp/
 rag_output/
-gk8_doc_analysis.json
-gk8_doc_summary.md
+doc_analysis.json
+doc_summary.md

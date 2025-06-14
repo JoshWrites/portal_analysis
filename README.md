@@ -4,19 +4,48 @@ A comprehensive suite of tools for analyzing and processing documentation websit
 
 ## 🎯 Purpose Overview
 
-### **gk8_doc_analyzer.py** - Documentation Analysis Tool
+### **doc_analyzer.py** - Documentation Analysis Tool
 Crawls and analyzes documentation to identify:
 - Duplicate content across different documentation spaces
 - Single-sourcing opportunities to reduce maintenance
 - Image and diagram duplication
 - Hard-coded values that should be variables
 
-### **gk8_rag_processor.py** - RAG Content Processor
+### **rag_processor.py** - RAG Content Processor
 Transforms documentation into optimized chunks for RAG systems:
 - Cleans HTML content while preserving semantic structure
 - Creates intelligently-sized chunks with metadata
 - Generates markdown files ready for knowledge bases
 - Maintains context and relationships between chunks
+
+## 🌐 Portal Compatibility
+
+These tools are designed for documentation portals with the following characteristics:
+
+### **Ideal For:**
+- **JavaScript-rendered documentation sites** (React, Vue, Angular-based)
+- **Static site generators** with authentication (Docusaurus, GitBook, MkDocs)
+- **Enterprise documentation portals** with JWT/session-based security
+- **API documentation platforms** (Swagger UI, Redoc, custom solutions)
+- **Knowledge bases** with structured content and navigation
+
+### **Key Requirements:**
+- **JWT token authentication** (passed via URL parameters or headers)
+- **HTML-based content** (not PDF-only or binary formats)
+- **Consistent URL structure** for content categorization
+- **Server-side or client-side rendering** (both supported via Playwright)
+
+### **Authentication Support:**
+The tools currently support JWT authentication where tokens are passed as URL parameters (e.g., `?jwt=token`). The authentication flow:
+1. Initial request with JWT token establishes session
+2. Browser cookies maintain authentication state
+3. Subsequent requests use session cookies
+
+### **Not Suitable For:**
+- Sites requiring CAPTCHA or 2FA interaction
+- Documentation behind complex SSO flows (without JWT)
+- Binary-only documentation (PDFs without HTML)
+- Rate-limited APIs without HTML documentation
 
 ## 📦 Installation
 
@@ -52,21 +81,21 @@ Transforms documentation into optimized chunks for RAG systems:
 
 ### For Documentation Analysis:
 ```bash
-./gk8_doc_analyzer.py
+./doc_analyzer.py
 # Enter JWT token when prompted
-# Provide URLs or use defaults
+# Provide URLs to analyze
 ```
 
 ### For RAG Processing:
 ```bash
-./gk8_rag_processor.py
+./rag_processor.py
 # Enter JWT token when prompted
 # Specify output directory (default: rag_output)
-# Provide URLs or use defaults
+# Provide URLs to process
 ```
 
 <details>
-<summary><h2>📊 Documentation Analyzer (gk8_doc_analyzer.py)</h2></summary>
+<summary><h2>📊 Documentation Analyzer (doc_analyzer.py)</h2></summary>
 
 ### Overview
 The Documentation Analyzer uses AI to comprehensively analyze your documentation portal, identifying opportunities for content consolidation and improvement.
@@ -99,21 +128,21 @@ The Documentation Analyzer uses AI to comprehensively analyze your documentation
    - **Diagram Extraction**: Identifies and compares Mermaid diagrams
 
 4. **Output Generation**
-   - `gk8_doc_analysis.json`: Complete analysis data
-   - `gk8_doc_summary.md`: Human-readable findings
+   - `doc_analysis.json`: Complete analysis data
+   - `doc_summary.md`: Human-readable findings
 
 ### Usage Example
 ```bash
-./gk8_doc_analyzer.py
+./doc_analyzer.py
 
 Enter your JWT token: eyJhbGciOiJIUzI1NiIs...
 Enable debug mode? (y/n): n
 Enter URLs to crawl (one per line, empty line to finish):
-> https://docs.example.com
-> https://docs.example.com/api-v15
+> https://docs.yourcompany.com
+> https://docs.yourcompany.com/api/v2
 > 
 
-Starting GK8 documentation analysis...
+Starting documentation analysis...
 Step 1: Crawling pages...
 Pages crawled: 338
 Step 2: Analyzing content with Vision AI...
@@ -123,15 +152,15 @@ Analysis complete!
 
 ### Next Steps with Output
 
-1. **Review the Summary** (`gk8_doc_summary.md`):
+1. **Review the Summary** (`doc_summary.md`):
    - Prioritize high-similarity content pairs
    - Identify quick wins for consolidation
    - Plan content refactoring
 
-2. **Deep Dive with JSON** (`gk8_doc_analysis.json`):
+2. **Deep Dive with JSON** (`doc_analysis.json`):
    ```python
    import json
-   with open('gk8_doc_analysis.json') as f:
+   with open('doc_analysis.json') as f:
        data = json.load(f)
    
    # Find pages with most duplication
@@ -152,10 +181,10 @@ Analysis complete!
 </details>
 
 <details>
-<summary><h2>🤖 RAG Processor (gk8_rag_processor.py)</h2></summary>
+<summary><h2>🤖 RAG Processor (rag_processor.py)</h2></summary>
 
 ### Overview
-The RAG Processor transforms your documentation into optimized chunks for use with Retrieval-Augmented Generation systems like Msty's Knowledge Stack.
+The RAG Processor transforms your documentation into optimized chunks for use with Retrieval-Augmented Generation systems like Msty's Knowledge Stack or custom RAG implementations.
 
 ### Key Features
 - **Smart Chunking**: Respects semantic boundaries and section headers
@@ -190,7 +219,7 @@ The RAG Processor transforms your documentation into optimized chunks for use wi
 4. **Output Structure**
    ```
    rag_output/
-   ├── api-v15/
+   ├── api-v2/
    │   ├── authentication-overview-01.md
    │   ├── authentication-overview-02.md
    │   └── jwt-configuration-01.md
@@ -202,15 +231,16 @@ The RAG Processor transforms your documentation into optimized chunks for use wi
 
 ### Usage Example
 ```bash
-./gk8_rag_processor.py
+./rag_processor.py
 
 Enter your JWT token: eyJhbGciOiJIUzI1NiIs...
 Enable debug mode? (y/n): n
 Output directory (default: rag_output): my_docs
 Enter URLs to crawl (one per line, empty line to finish):
+> https://docs.yourcompany.com
 > 
 
-Starting GK8 RAG document processing...
+Starting RAG document processing...
 Step 1: Crawling pages...
 Pages crawled: 156
 Step 2: Processing content into RAG chunks...
@@ -223,16 +253,16 @@ Processing complete!
 ```yaml
 ---
 title: "Authentication Overview"
-page_url: "https://docs.example.com/api-v15/auth"
-space: "api-v15"
-breadcrumb: "API v15 > Authentication > Overview"
+page_url: "https://docs.yourcompany.com/api/auth"
+space: "api"
+breadcrumb: "API Documentation > Authentication > Overview"
 content_type: "api"
 chunk_index: 1
 total_chunks: 3
 token_count: 842
 related_links:
-  - "https://docs.example.com/api-v15/auth/jwt"
-  - "https://docs.example.com/api-v15/auth/oauth"
+  - "https://docs.yourcompany.com/api/auth/jwt"
+  - "https://docs.yourcompany.com/api/auth/oauth"
 ---
 
 # Authentication Overview
@@ -242,11 +272,11 @@ The API uses JWT tokens for authentication. All requests must include a valid to
 
 ### Next Steps with Output
 
-1. **Import to Msty Knowledge Stack**:
-   - Open Msty and create a new Knowledge Stack
-   - Import the markdown files from `rag_output/`
-   - Configure chunking settings if needed
-   - Test retrieval with sample queries
+1. **Import to Knowledge Systems**:
+   - **Msty**: Import markdown files into Knowledge Stack
+   - **LangChain**: Load as documents with metadata
+   - **LlamaIndex**: Use as knowledge base
+   - **Custom RAG**: Process with your embedding pipeline
 
 2. **Custom Processing**:
    ```python
@@ -276,19 +306,22 @@ The API uses JWT tokens for authentication. All requests must include a valid to
    - Test retrieval performance
 
 4. **Integration Options**:
-   - **LangChain**: Load markdown files as documents
-   - **LlamaIndex**: Import with metadata intact
-   - **Custom RAG**: Use chunks with your embedding model
    - **Vector Databases**: Index with metadata filters
+   - **Search Systems**: Use metadata for faceted search
+   - **ChatBots**: Provide contextual documentation answers
+   - **Support Systems**: Enhanced ticket resolution
 </details>
 
 ## 🛠️ Common Configuration
 
 ### Authentication Setup
-Both tools support various authentication methods:
-- **JWT URL Parameters**: `?jwt=token&reload`
-- **Bearer Token Headers**: Automatic injection
-- **Session Cookies**: Maintained across requests
+Both tools support JWT authentication where tokens are passed as URL parameters:
+```python
+# Current implementation
+auth_url = f"{base_url}?jwt={jwt_token}&reload"
+```
+
+To adapt for other authentication methods, modify the `_authenticate()` method in either tool.
 
 ### URL Filtering
 Customize which pages to crawl by modifying:
@@ -320,6 +353,26 @@ def determine_space(self, url):
 - **Rich** for console output
 - **PyYAML** for metadata handling
 - **Ollama + Llama 3.2 Vision** (analyzer only)
+
+## 🔧 Extending the Tools
+
+### Adding Authentication Methods
+To support OAuth, SAML, or other authentication:
+1. Modify `_authenticate()` method
+2. Update session/cookie handling
+3. Adjust the initial authentication URL pattern
+
+### Custom Content Processing
+To handle specific documentation formats:
+1. Update `clean_content()` for your HTML structure
+2. Modify `extract_sections()` for custom layouts
+3. Adjust chunking logic in `create_chunks()`
+
+### Output Format Customization
+To generate different output formats:
+1. Modify `save_chunk()` for new file formats
+2. Update metadata structure in `extract_metadata()`
+3. Adjust the index generation logic
 
 ## 🤝 Contributing
 
