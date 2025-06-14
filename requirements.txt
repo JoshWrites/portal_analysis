@@ -6,3 +6,4 @@ imagehash
 Pillow
 rich
 playwright
+pyyaml

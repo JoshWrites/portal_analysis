@@ -72,3 +72,6 @@ dmypy.json
 *.xlsx
 output/
 temp/
+rag_output/
+doc_analysis.json
+doc_summary.md

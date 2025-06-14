@@ -20,13 +20,13 @@ from datetime import datetime
 
 console = Console()
 
-class GK8DocAnalyzer:
+class DocAnalyzer:
     def __init__(self, jwt_token, ollama_model="llama3.2-vision:11b", debug=False):
         self.jwt_token = jwt_token
-        self.base_url = "https://docs.gk8.io"
+        self.base_url = ""  # Will be set from first URL
         self.headers = {
             "Authorization": f"Bearer {jwt_token}",
-            "User-Agent": "GK8-Doc-Analyzer/1.0"
+            "User-Agent": "Doc-Analyzer/1.0"
         }
         self.visited_urls = set()
         self.content_data = []
@@ -79,7 +79,9 @@ class GK8DocAnalyzer:
             console.print("[dim]Authenticating with JWT...[/dim]")
             
             # Initial authentication request with JWT and reload parameter
-            auth_url = f"https://docs.gk8.io?jwt={self.jwt_token}&reload"
+            # Use the base URL if set, otherwise use a placeholder
+            base = self.base_url if self.base_url else "https://docs.example.com"
+            auth_url = f"{base}?jwt={self.jwt_token}&reload"
             self.page.goto(auth_url)
             
             # Wait for authentication to complete and page to load
@@ -210,7 +212,7 @@ class GK8DocAnalyzer:
             return False
         
         # Must be within our base domain
-        if not normalized_url.startswith(self.base_url):
+        if self.base_url and not normalized_url.startswith(self.base_url):
             return False
         
         # Check exclude patterns
@@ -437,6 +439,12 @@ class GK8DocAnalyzer:
         # Record start time
         start_time = datetime.now()
         
+        # Set base URL from first URL if not already set
+        if not self.base_url and start_urls:
+            parsed = urlparse(start_urls[0])
+            self.base_url = f"{parsed.scheme}://{parsed.netloc}"
+            console.print(f"[dim]Base URL set to: {self.base_url}[/dim]")
+        
         # Normalize start URLs
         normalized_starts = [self.normalize_url(url) for url in start_urls]
         
@@ -546,48 +554,260 @@ class GK8DocAnalyzer:
             console.print(f"[red]Vision analysis error:[/red] {e}")
             return None
     
+    def _extract_sections(self, content):
+        """Extract sections based on common markdown/HTML headers"""
+        sections = []
+        
+        # Common header patterns
+        header_patterns = [
+            r'^#{1,6}\s+(.+)$',  # Markdown headers
+            r'^(.+)\n[=-]+$',     # Markdown underline headers
+            r'<h[1-6][^>]*>(.+?)</h[1-6]>',  # HTML headers
+            r'^(?:Installation|Configuration|Setup|Usage|Example|API|Reference|Getting Started|Prerequisites|Requirements|Troubleshooting).*$'  # Common section names
+        ]
+        
+        lines = content.split('\n')
+        current_section = {'start': 0, 'content': '', 'header': ''}
+        current_pos = 0
+        
+        for i, line in enumerate(lines):
+            current_pos += len(line) + 1  # +1 for newline
+            
+            # Check if this line is a header
+            is_header = False
+            header_text = ''
+            
+            for pattern in header_patterns:
+                match = re.match(pattern, line.strip(), re.IGNORECASE | re.MULTILINE)
+                if match:
+                    is_header = True
+                    header_text = match.group(1) if match.groups() else line.strip()
+                    break
+            
+            if is_header and current_section['content'].strip():
+                # Save previous section
+                sections.append(current_section)
+                # Start new section
+                current_section = {
+                    'start': current_pos,
+                    'content': '',
+                    'header': header_text
+                }
+            else:
+                current_section['content'] += line + '\n'
+        
+        # Add final section
+        if current_section['content'].strip():
+            sections.append(current_section)
+        
+        return sections
+    
     def find_single_source_candidates(self):
-        """Use AI to find content that should be single-sourced"""
+        """Use AI to find content that should be single-sourced - with sliding window hash prefiltering"""
         console.print("\n[yellow]Finding single-source candidates...[/yellow]")
         
-        candidates = []
-        total_pages = len(self.content_data)
-        total_comparisons = (total_pages * (total_pages - 1)) // 2  # n*(n-1)/2 combinations
-        comparisons_done = 0
+        # Step 1: Create sliding window hashes for each page
+        console.print("[dim]Step 1: Creating sliding window hashes for deep content comparison...[/dim]")
         
-        # Group content by similarity
-        with console.status("[bold green]Analyzing content for similarities...") as status:
-            for i, page1 in enumerate(self.content_data):
-                status.update(f"[bold green]Analyzing page {i+1}/{total_pages}: {page1['url'].split('/')[-1][:30]}...")
+        WINDOW_SIZE = 500  # Characters per window
+        STEP_SIZE = 250    # Overlap between windows
+        MIN_WINDOW_WORDS = 50  # Minimum words in a window to consider
+        
+        page_windows = {}
+        
+        for i, page in enumerate(self.content_data):
+            content = page['content'].lower()
+            windows = []
+            
+            # Extract meaningful sections using headers as hints
+            sections = self._extract_sections(page['content'])
+            
+            # Create windows for full content
+            for start in range(0, len(content) - WINDOW_SIZE + 1, STEP_SIZE):
+                window_text = content[start:start + WINDOW_SIZE]
+                word_count = len(window_text.split())
                 
-                for page2 in self.content_data[i+1:]:
-                    comparisons_done += 1
-                    if comparisons_done % 50 == 0:  # Update every 50 comparisons
-                        progress_pct = int((comparisons_done / total_comparisons) * 100)
-                        status.update(f"[bold green]Comparing content... {comparisons_done}/{total_comparisons} ({progress_pct}%)")
+                if word_count >= MIN_WINDOW_WORDS:
+                    window_hash = hashlib.md5(window_text.encode()).hexdigest()[:16]  # Shorter hash
+                    windows.append({
+                        'hash': window_hash,
+                        'start': start,
+                        'text': window_text,
+                        'words': set(window_text.split()[:50])  # First 50 words for quick comparison
+                    })
+            
+            # Also hash each section independently
+            for section in sections:
+                if len(section['content']) > 100:  # Meaningful section
+                    section_hash = hashlib.md5(section['content'].lower().encode()).hexdigest()[:16]
+                    windows.append({
+                        'hash': section_hash,
+                        'start': section['start'],
+                        'text': section['content'].lower(),
+                        'words': set(section['content'].lower().split()[:50]),
+                        'is_section': True,
+                        'header': section.get('header', '')
+                    })
+            
+            page_windows[i] = {
+                'url': page['url'],
+                'space': page['space'],
+                'windows': windows,
+                'content_length': len(content)
+            }
+            
+            if (i + 1) % 50 == 0:
+                console.print(f"[dim]Processed {i + 1}/{len(self.content_data)} pages...[/dim]")
+        
+        # Step 2: Find matching windows between pages
+        console.print("[dim]Step 2: Finding matching content windows across pages...[/dim]")
+        
+        # Build hash lookup for fast comparison
+        window_lookup = defaultdict(list)
+        for page_idx, page_data in page_windows.items():
+            for window in page_data['windows']:
+                window_lookup[window['hash']].append({
+                    'page_idx': page_idx,
+                    'window': window,
+                    'url': page_data['url'],
+                    'space': page_data['space']
+                })
+        
+        # Find pages with matching windows
+        page_pair_matches = defaultdict(lambda: {'matches': 0, 'sections': []})
+        total_pages = len(self.content_data)
+        
+        for hash_val, occurrences in window_lookup.items():
+            if len(occurrences) < 2:
+                continue
+                
+            # Check each pair of pages with this matching window
+            for i in range(len(occurrences)):
+                for j in range(i + 1, len(occurrences)):
+                    page1 = occurrences[i]
+                    page2 = occurrences[j]
                     
-                    if page1['space'] != page2['space']:  # Cross-space comparison
-                        prompt = f"""
-                        Compare these two documentation sections and identify if they contain 
-                        similar content that could be single-sourced. Look for:
-                        - Installation instructions
-                        - Configuration steps
-                        - API examples
-                        - Troubleshooting guides
-                        
-                        Section 1 (from {page1['space']}): {page1['content'][:1000]}
-                        Section 2 (from {page2['space']}): {page2['content'][:1000]}
-                        
-                        If similar, explain what could be consolidated and estimate similarity percentage.
-                        """
-                        
-                        analysis = self.analyze_with_ollama(prompt, "")
-                        if analysis and "similar" in analysis.lower():
-                            candidates.append({
-                                'page1': page1['url'],
-                                'page2': page2['url'],
-                            'analysis': analysis
-                        })
+                    # Skip if same space
+                    if page1['space'] == page2['space']:
+                        continue
+                    
+                    # Create consistent pair key
+                    pair_key = tuple(sorted([page1['page_idx'], page2['page_idx']]))
+                    
+                    # Track this match
+                    page_pair_matches[pair_key]['matches'] += 1
+                    
+                    # Track section matches specially
+                    if page1['window'].get('is_section') or page2['window'].get('is_section'):
+                        section_info = {
+                            'hash': hash_val,
+                            'header1': page1['window'].get('header', ''),
+                            'header2': page2['window'].get('header', ''),
+                            'preview': page1['window']['text'][:100]
+                        }
+                        page_pair_matches[pair_key]['sections'].append(section_info)
+        
+        # Convert to sorted list of potential pairs
+        potential_pairs = []
+        for (idx1, idx2), match_data in page_pair_matches.items():
+            # Calculate similarity score based on matches
+            match_count = match_data['matches']
+            section_matches = len(match_data['sections'])
+            
+            # Higher weight for section matches
+            similarity_score = min(100, match_count * 5 + section_matches * 20)
+            
+            if similarity_score >= 20:  # Lower threshold for window-based matching
+                potential_pairs.append({
+                    'indices': (idx1, idx2),
+                    'score': similarity_score,
+                    'window_matches': match_count,
+                    'section_matches': section_matches,
+                    'matched_sections': match_data['sections'][:3]  # Keep top 3 for reference
+                })
+        
+        # Sort by similarity score (highest first)
+        potential_pairs.sort(key=lambda x: x['score'], reverse=True)
+        
+        console.print(f"[green]Found {len(potential_pairs)} potentially similar page pairs out of {total_pages * (total_pages - 1) // 2} total[/green]")
+        console.print(f"[green]Reduction: {100 - (len(potential_pairs) * 100 // (total_pages * (total_pages - 1) // 2)):.1f}% fewer AI calls needed[/green]")
+        
+        # Show some example matches
+        if potential_pairs and self.debug:
+            console.print("\n[dim]Top matching pairs:[/dim]")
+            for pair in potential_pairs[:3]:
+                idx1, idx2 = pair['indices']
+                console.print(f"[dim]- {self.content_data[idx1]['url'].split('/')[-1]} <-> {self.content_data[idx2]['url'].split('/')[-1]}[/dim]")
+                console.print(f"[dim]  Score: {pair['score']}, Windows: {pair['window_matches']}, Sections: {pair['section_matches']}[/dim]")
+                if pair['matched_sections']:
+                    console.print(f"[dim]  Matched section: {pair['matched_sections'][0]['header1'] or 'content'}[/dim]")
+        
+        # Step 3: AI analysis only on promising pairs
+        candidates = []
+        ai_calls_made = 0
+        
+        with console.status("[bold green]Analyzing similar content pairs with AI...") as status:
+            for idx, pair in enumerate(potential_pairs):
+                idx1, idx2 = pair['indices']
+                page1 = self.content_data[idx1]
+                page2 = self.content_data[idx2]
+                
+                status.update(f"[bold green]AI Analysis {idx+1}/{len(potential_pairs)} (score: {pair['score']}, matches: {pair['window_matches']})")
+                
+                # Build context-aware prompt
+                prompt = f"""
+                Compare these two documentation sections and identify if they contain 
+                similar content that could be single-sourced. 
+                
+                IMPORTANT: These pages have {pair['window_matches']} matching content windows"""
+                
+                if pair['section_matches'] > 0:
+                    prompt += f" and {pair['section_matches']} matching sections"
+                    if pair['matched_sections']:
+                        prompt += f" including: {', '.join(s['header1'] or s['preview'][:30] for s in pair['matched_sections'][:2])}"
+                
+                prompt += f"""
+                
+                Look for:
+                - Installation instructions
+                - Configuration steps
+                - API examples
+                - Code snippets
+                - Step-by-step procedures
+                - Troubleshooting guides
+                
+                Page 1 ({page1['space']}): {page1['url']}
+                Content sample: {page1['content'][:1000]}
+                
+                Page 2 ({page2['space']}): {page2['url']}
+                Content sample: {page2['content'][:1000]}
+                
+                If similar content exists, explain:
+                1. What specific sections/content could be consolidated
+                2. Estimated overlap percentage
+                3. Which parts are identical vs slightly different
+                """
+                
+                analysis = self.analyze_with_ollama(prompt, "")
+                ai_calls_made += 1
+                
+                if analysis and "similar" in analysis.lower():
+                    candidates.append({
+                        'page1': page1['url'],
+                        'page2': page2['url'],
+                        'similarity_score': pair['score'],
+                        'window_matches': pair['window_matches'],
+                        'section_matches': pair['section_matches'],
+                        'matched_sections': pair['matched_sections'],
+                        'analysis': analysis
+                    })
+                
+                # Update progress
+                if ai_calls_made % 10 == 0:
+                    console.print(f"[dim]Progress: {ai_calls_made} AI analyses complete, {len(candidates)} candidates found[/dim]")
+        
+        console.print(f"\n[green]Analysis complete! Made {ai_calls_made} AI calls instead of {total_pages * (total_pages - 1) // 2}[/green]")
+        console.print(f"[green]Found {len(candidates)} single-sourcing opportunities[/green]")
         
         return candidates
     
@@ -789,12 +1009,12 @@ class GK8DocAnalyzer:
         }
         
         # Save report
-        with open("gk8_doc_analysis.json", "w") as f:
+        with open("doc_analysis.json", "w") as f:
             json.dump(report, f, indent=2)
         
         # Create human-readable summary
-        with open("gk8_doc_summary.md", "w") as f:
-            f.write("# GK8 Documentation Analysis Report\n\n")
+        with open("doc_summary.md", "w") as f:
+            f.write("# Documentation Analysis Report\n\n")
             f.write(f"## Summary\n")
             f.write(f"- Total pages analyzed: {report['summary']['total_pages']}\n")
             f.write(f"- Spaces: {', '.join(report['summary']['spaces_analyzed'])}\n")
@@ -885,7 +1105,7 @@ class GK8DocAnalyzer:
             else:
                 f.write("\nNo Mermaid diagrams found in the documentation.\n")
         
-        console.print("[green]Report saved to gk8_doc_analysis.json and gk8_doc_summary.md[/green]")
+        console.print("[green]Report saved to doc_analysis.json and doc_summary.md[/green]")
 
 def main():
     """Main function that runs the entire analysis"""
@@ -897,13 +1117,13 @@ def main():
     
     # Initialize analyzer with Llama 3.2 Vision
     console.print("[blue]Initializing analyzer with Llama 3.2 Vision...[/blue]")
-    analyzer = GK8DocAnalyzer(JWT_TOKEN, ollama_model="llama3.2-vision:11b", debug=debug_mode)
+    analyzer = DocAnalyzer(JWT_TOKEN, ollama_model="llama3.2-vision:11b", debug=debug_mode)
     
     # Get URLs to crawl
     console.print("\n[yellow]Enter URLs to crawl (one per line, empty line to finish):[/yellow]")
     console.print("[dim]Default URLs if none provided:[/dim]")
-    console.print("[dim]  - https://docs.gk8.io[/dim]")
-    console.print("[dim]  - https://docs.gk8.io/api-v15[/dim]")
+    console.print("[dim]  - https://docs.example.com[/dim]")
+    console.print("[dim]  - https://docs.example.com/api/v2[/dim]")
     
     start_urls = []
     while True:
@@ -918,12 +1138,13 @@ def main():
     # Use default URLs if none provided
     if not start_urls:
         start_urls = [
-            "https://docs.gk8.io",  # General space
-            "https://docs.gk8.io/api-v15"  # API v15 space
+            # You should provide your documentation URLs
         ]
+        console.print("[red]No URLs provided. Please enter at least one URL to analyze.[/red]")
+        return
         console.print("\n[dim]Using default URLs.[/dim]")
     
-    console.print("[green]Starting GK8 documentation analysis...[/green]")
+    console.print("[green]Starting documentation analysis...[/green]")
     console.print(f"[yellow]Using model:[/yellow] llama3.2-vision:11b with 8K context")
     console.print(f"[yellow]Debug mode:[/yellow] {'Enabled' if debug_mode else 'Disabled'}")
     console.print(f"[yellow]Targeting:[/yellow]")
@@ -940,8 +1161,8 @@ def main():
     
     console.print("\n[green]Analysis complete![/green]")
     console.print("Check these files for results:")
-    console.print("  - gk8_doc_analysis.json (detailed data)")
-    console.print("  - gk8_doc_summary.md (human-readable report)")
+    console.print("  - doc_analysis.json (detailed data)")
+    console.print("  - doc_summary.md (human-readable report)")
 
 
 # This is the entry point when running the script

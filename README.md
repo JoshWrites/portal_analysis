@@ -1,40 +1,53 @@
-# Documentation Portal Analyzer
+# Documentation Portal Analysis Toolset
 
-A comprehensive tool for analyzing documentation websites, with special support for JavaScript-rendered portals that require authentication. Uses AI-powered analysis to identify content duplication, suggest single-sourcing opportunities, and analyze documentation structure.
+A comprehensive suite of tools for analyzing and processing documentation websites, with special support for JavaScript-rendered portals that require authentication. This toolset helps documentation teams identify content duplication, prepare content for RAG systems, and maintain documentation quality.
 
-## Features
+## 🎯 Purpose Overview
 
-### 🔍 **Comprehensive Crawling**
-- **JavaScript Support**: Uses Playwright to crawl modern, JavaScript-rendered documentation sites
-- **Session-Based Authentication**: Handles JWT tokens and maintains browser sessions
-- **Intelligent Link Discovery**: Breadth-first search with duplicate detection
-- **Multi-Space Support**: Analyzes different documentation sections (APIs, guides, references)
+### **doc_analyzer.py** - Documentation Analysis Tool
+Crawls and analyzes documentation to identify:
+- Duplicate content across different documentation spaces
+- Single-sourcing opportunities to reduce maintenance
+- Image and diagram duplication
+- Hard-coded values that should be variables
 
-### 🤖 **AI-Powered Analysis**
-- **Content Similarity Detection**: Uses Ollama/Llama 3.2 Vision to find duplicate content across spaces
-- **Single-Sourcing Recommendations**: Identifies content that should be consolidated
-- **Variable Detection**: Finds hardcoded values that should be variables (versions, URLs, etc.)
-- **Image Analysis**: Detects duplicate images and analyzes visual content
+### **rag_processor.py** - RAG Content Processor
+Transforms documentation into optimized chunks for RAG systems:
+- Cleans HTML content while preserving semantic structure
+- Creates intelligently-sized chunks with metadata
+- Generates markdown files ready for knowledge bases
+- Maintains context and relationships between chunks
 
-### 📊 **Progress Tracking & Reporting**
-- **Real-time Progress**: Live progress bars with time estimates
-- **Detailed Statistics**: Crawl coverage, timing, and space breakdown
-- **Comprehensive Reports**: JSON data export and markdown summaries
-- **Visual Feedback**: Rich console output with color coding
+## 🌐 Portal Compatibility
 
-### 🖼️ **Media Analysis**
-- **Image Duplicate Detection**: Perceptual hashing to find similar images
-- **Vision AI Analysis**: Describes image content and reusability
-- **Mermaid Diagram Extraction**: Identifies and categorizes diagrams
-- **SVG Handling**: Proper handling of vector graphics
+These tools are designed for documentation portals with the following characteristics:
 
-## Prerequisites
+### **Ideal For:**
+- **JavaScript-rendered documentation sites** (React, Vue, Angular-based)
+- **Static site generators** with authentication (Docusaurus, GitBook, MkDocs)
+- **Enterprise documentation portals** with JWT/session-based security
+- **API documentation platforms** (Swagger UI, Redoc, custom solutions)
+- **Knowledge bases** with structured content and navigation
 
-- **Python 3.8+**
-- **Ollama** with Llama 3.2 Vision model installed
-- **Documentation portal access** (JWT tokens, credentials, etc.)
+### **Key Requirements:**
+- **JWT token authentication** (passed via URL parameters or headers)
+- **HTML-based content** (not PDF-only or binary formats)
+- **Consistent URL structure** for content categorization
+- **Server-side or client-side rendering** (both supported via Playwright)
 
-## Installation
+### **Authentication Support:**
+The tools currently support JWT authentication where tokens are passed as URL parameters (e.g., `?jwt=token`). The authentication flow:
+1. Initial request with JWT token establishes session
+2. Browser cookies maintain authentication state
+3. Subsequent requests use session cookies
+
+### **Not Suitable For:**
+- Sites requiring CAPTCHA or 2FA interaction
+- Documentation behind complex SSO flows (without JWT)
+- Binary-only documentation (PDFs without HTML)
+- Rate-limited APIs without HTML documentation
+
+## 📦 Installation
 
 1. **Clone the repository**:
    ```bash
@@ -58,159 +71,317 @@ A comprehensive tool for analyzing documentation websites, with special support 
    playwright install chromium
    ```
 
-5. **Set up Ollama** (if not already installed):
+5. **Set up Ollama** (only for doc_analyzer):
    ```bash
    # Install Ollama following instructions at https://ollama.ai
    ollama pull llama3.2-vision:11b
    ```
 
-## Usage
+## 🚀 Quick Start
 
-### Basic Analysis
+### For Documentation Analysis:
+```bash
+./doc_analyzer.py
+# Enter JWT token when prompted
+# Provide URLs to analyze
+```
 
-1. **Run the analyzer**:
-   ```bash
-   ./doc_analyzer.py
+### For RAG Processing:
+```bash
+./rag_processor.py
+# Enter JWT token when prompted
+# Specify output directory (default: rag_output)
+# Provide URLs to process
+```
+
+<details>
+<summary><h2>📊 Documentation Analyzer (doc_analyzer.py)</h2></summary>
+
+### Overview
+The Documentation Analyzer uses AI to comprehensively analyze your documentation portal, identifying opportunities for content consolidation and improvement.
+
+### Key Features
+- **JavaScript Support**: Uses Playwright to handle modern SPAs and dynamic content
+- **Smart Crawling**: BFS algorithm with intelligent URL normalization
+- **AI Analysis**: Leverages Llama 3.2 Vision for content and image analysis
+- **Sliding Window Analysis**: Efficiently compares content across pages
+- **Rich Reporting**: Generates both JSON data and markdown summaries
+
+### How It Works
+
+1. **Authentication & Setup**
+   - Uses JWT token to authenticate with the portal
+   - Establishes browser session with Playwright
+   - Maintains cookies for subsequent requests
+
+2. **Crawling Phase**
+   ```
+   Starting BFS crawl from 2 seed URLs
+   Crawling... Queue: 45 | Visited: 123
+   Progress: 280 pages crawled, 58 in queue
    ```
 
-2. **Provide authentication**:
-   - Enter your JWT token when prompted
-   - Choose 'n' for debug mode (use only for troubleshooting)
+3. **Analysis Phase**
+   - **Content Hashing**: Creates sliding window hashes for deep comparison
+   - **AI Evaluation**: Uses Ollama to analyze similar content pairs
+   - **Image Analysis**: Perceptual hashing + vision AI for images
+   - **Diagram Extraction**: Identifies and compares Mermaid diagrams
 
-3. **Specify URLs to crawl**:
-   - Enter documentation URLs one per line
-   - Press Enter on empty line to start with defaults
-   - The tool will discover and crawl linked pages automatically
+4. **Output Generation**
+   - `doc_analysis.json`: Complete analysis data
+   - `doc_summary.md`: Human-readable findings
 
-### Authentication Methods
-
-The tool supports various authentication patterns:
-
-- **JWT URL Parameters**: `https://docs.example.com?jwt=token&reload`
-- **Bearer Token Headers**: Automatic header injection
-- **Session Cookies**: Maintains authentication state across requests
-
-### Example Output
-
-```
-Crawl complete!
-Completed at: 23:00:07 (Duration: 0:19:52)
-Statistics:
-  • Pages crawled: 338
-  • Total links found: 426
-  • Duplicate links skipped: 91
-  • Unique pages by space:
-    - api-v15: 243 pages
-    - guides-v15: 59 pages
-    - reference: 31 pages
-    - general: 5 pages
-
-Step 2: Analyzing content with Vision AI...
-Finding single-source candidates... 1250/57003 (2%)
-Processing images ████████████████ 45/338 13% 0:02:30 < 0:16:45
-```
-
-The tool provides comprehensive progress tracking throughout all phases, including real-time status updates, completion percentages, and time estimates.
-
-## Configuration
-
-### Custom URL Patterns
-Modify the `should_crawl_url()` and `determine_space()` methods to customize:
-- Which URLs to include/exclude
-- How to categorize different documentation sections
-- Authentication requirements
-
-### Ollama Configuration
-The analyzer uses these default settings:
-- **Model**: `llama3.2-vision:11b`
-- **Context Size**: 8192 tokens
-- **Vision Analysis**: Limited to first 20 images for performance
-
-## Output Files
-
-The analyzer generates several output files:
-
-- **`doc_analysis.json`**: Raw analysis data in JSON format
-- **`doc_summary.md`**: Human-readable markdown report
-- **Console Output**: Real-time progress and statistics
-
-## Common Use Cases
-
-### 1. **Documentation Audit**
-- Identify duplicate content across different sections
-- Find outdated or inconsistent information
-- Analyze content distribution and coverage
-
-### 2. **Content Consolidation**
-- Discover single-sourcing opportunities
-- Identify shared components and examples
-- Reduce maintenance overhead
-
-### 3. **Portal Migration**
-- Inventory existing content before migration
-- Understand site structure and dependencies
-- Plan content reorganization
-
-### 4. **Quality Assurance**
-- Find broken internal links
-- Identify missing images or media
-- Validate content completeness
-
-## Troubleshooting
-
-### Common Issues
-
-**Browser/Authentication Issues**:
-- Ensure JWT token is valid and not expired
-- Check that Playwright can access the documentation portal
-- Verify network connectivity and firewall settings
-
-**Ollama Connection Issues**:
-- Confirm Ollama is running: `ollama list`
-- Check model availability: `ollama pull llama3.2-vision:11b`
-- Verify sufficient VRAM for vision model
-
-**Performance Issues**:
-- Large sites may take significant time to crawl
-- Consider limiting scope with URL filters
-- Monitor system resources during analysis
-
-### Debug Mode
-
-Debug mode is available for troubleshooting crawling issues:
+### Usage Example
 ```bash
-# When prompted, enter 'y' for debug mode (only when needed)
-Enable debug mode? (y/n): y
+./doc_analyzer.py
+
+Enter your JWT token: eyJhbGciOiJIUzI1NiIs...
+Enable debug mode? (y/n): n
+Enter URLs to crawl (one per line, empty line to finish):
+> https://docs.yourcompany.com
+> https://docs.yourcompany.com/api/v2
+> 
+
+Starting documentation analysis...
+Step 1: Crawling pages...
+Pages crawled: 338
+Step 2: Analyzing content with Vision AI...
+Found 47 single-sourcing opportunities
+Analysis complete!
 ```
 
-Debug mode provides additional details:
-- Detailed crawling progress and link discovery
-- Authentication status and session validation
-- Content size warnings and error details
-- Verbose logging for all operations
+### Next Steps with Output
 
-**Note**: Debug mode generates significant console output and should only be used when diagnosing issues.
+1. **Review the Summary** (`doc_summary.md`):
+   - Prioritize high-similarity content pairs
+   - Identify quick wins for consolidation
+   - Plan content refactoring
 
-## Contributing
+2. **Deep Dive with JSON** (`doc_analysis.json`):
+   ```python
+   import json
+   with open('doc_analysis.json') as f:
+       data = json.load(f)
+   
+   # Find pages with most duplication
+   for candidate in data['single_source_candidates']:
+       if candidate['similarity_score'] > 80:
+           print(f"High similarity: {candidate['page1']} <-> {candidate['page2']}")
+   ```
 
-This tool is designed to be extensible for different documentation platforms:
+3. **Image Consolidation**:
+   - Replace duplicate images with single source
+   - Update image references across documentation
+   - Consider creating a shared assets library
 
-1. **Add new authentication methods** in `_authenticate()`
-2. **Customize URL patterns** in `should_crawl_url()`
-3. **Extend space detection** in `determine_space()`
-4. **Add new analysis types** following existing patterns
+4. **Variable Extraction**:
+   - Create configuration files for version numbers
+   - Implement variable substitution in build process
+   - Update hard-coded values identified in report
+</details>
 
-## Dependencies
+<details>
+<summary><h2>🤖 RAG Processor (rag_processor.py)</h2></summary>
 
-- **playwright**: JavaScript-rendered content crawling
-- **beautifulsoup4**: HTML parsing and content extraction
-- **ollama**: AI analysis and vision processing
-- **rich**: Enhanced console output and progress tracking
-- **requests**: HTTP requests and session management
-- **imagehash**: Image duplicate detection
-- **pillow**: Image processing and analysis
-- **pandas**: Data analysis and export
+### Overview
+The RAG Processor transforms your documentation into optimized chunks for use with Retrieval-Augmented Generation systems like Msty's Knowledge Stack or custom RAG implementations.
 
-## License
+### Key Features
+- **Smart Chunking**: Respects semantic boundaries and section headers
+- **Context Preservation**: Maintains relationships between chunks
+- **Rich Metadata**: Includes breadcrumbs, content type, and related links
+- **Clean Output**: Removes navigation while preserving content structure
+- **YAML Frontmatter**: Machine-readable metadata for each chunk
 
-This project is provided as-is for documentation analysis purposes.
+### How It Works
+
+1. **Content Crawling**
+   - Same robust crawling as the analyzer
+   - Stores raw HTML for processing
+   - Maintains URL relationships
+
+2. **Processing Pipeline**
+   ```
+   For each page:
+   ├── Clean HTML (remove nav, ads, etc.)
+   ├── Extract metadata (breadcrumbs, links)
+   ├── Identify sections (headers, content blocks)
+   ├── Create chunks (300-1500 tokens each)
+   └── Save as markdown with frontmatter
+   ```
+
+3. **Chunk Generation**
+   - **Size Targets**: 300-1500 tokens per chunk
+   - **Overlap**: 100 tokens between chunks for context
+   - **Boundaries**: Respects headers and code blocks
+   - **Metadata**: Full context for each chunk
+
+4. **Output Structure**
+   ```
+   rag_output/
+   ├── api-v2/
+   │   ├── authentication-overview-01.md
+   │   ├── authentication-overview-02.md
+   │   └── jwt-configuration-01.md
+   ├── guides/
+   │   ├── getting-started-01.md
+   │   └── advanced-usage-01.md
+   └── index.md
+   ```
+
+### Usage Example
+```bash
+./rag_processor.py
+
+Enter your JWT token: eyJhbGciOiJIUzI1NiIs...
+Enable debug mode? (y/n): n
+Output directory (default: rag_output): my_docs
+Enter URLs to crawl (one per line, empty line to finish):
+> https://docs.yourcompany.com
+> 
+
+Starting RAG document processing...
+Step 1: Crawling pages...
+Pages crawled: 156
+Step 2: Processing content into RAG chunks...
+Processed 523 chunks from 156 pages
+Step 3: Generating index...
+Processing complete!
+```
+
+### Chunk Format Example
+```yaml
+---
+title: "Authentication Overview"
+page_url: "https://docs.yourcompany.com/api/auth"
+space: "api"
+breadcrumb: "API Documentation > Authentication > Overview"
+content_type: "api"
+chunk_index: 1
+total_chunks: 3
+token_count: 842
+related_links:
+  - "https://docs.yourcompany.com/api/auth/jwt"
+  - "https://docs.yourcompany.com/api/auth/oauth"
+---
+
+# Authentication Overview
+
+The API uses JWT tokens for authentication. All requests must include a valid token in the Authorization header...
+```
+
+### Next Steps with Output
+
+1. **Import to Knowledge Systems**:
+   - **Msty**: Import markdown files into Knowledge Stack
+   - **LangChain**: Load as documents with metadata
+   - **LlamaIndex**: Use as knowledge base
+   - **Custom RAG**: Process with your embedding pipeline
+
+2. **Custom Processing**:
+   ```python
+   import os
+   import yaml
+   
+   # Read all chunks and analyze
+   for root, dirs, files in os.walk('rag_output'):
+       for file in files:
+           if file.endswith('.md'):
+               with open(os.path.join(root, file)) as f:
+                   # Parse frontmatter
+                   content = f.read()
+                   frontmatter, text = content.split('---\n', 2)[1:]
+                   metadata = yaml.safe_load(frontmatter)
+                   
+                   # Process based on content type
+                   if metadata['content_type'] == 'api':
+                       # Special handling for API docs
+                       pass
+   ```
+
+3. **Quality Assurance**:
+   - Review the index.md for completeness
+   - Check chunk sizes are appropriate
+   - Verify metadata accuracy
+   - Test retrieval performance
+
+4. **Integration Options**:
+   - **Vector Databases**: Index with metadata filters
+   - **Search Systems**: Use metadata for faceted search
+   - **ChatBots**: Provide contextual documentation answers
+   - **Support Systems**: Enhanced ticket resolution
+</details>
+
+## 🛠️ Common Configuration
+
+### Authentication Setup
+Both tools support JWT authentication where tokens are passed as URL parameters:
+```python
+# Current implementation
+auth_url = f"{base_url}?jwt={jwt_token}&reload"
+```
+
+To adapt for other authentication methods, modify the `_authenticate()` method in either tool.
+
+### URL Filtering
+Customize which pages to crawl by modifying:
+```python
+# In either tool
+def should_crawl_url(self, url):
+    # Add your custom logic
+    if "/internal/" in url:
+        return False
+    return True
+```
+
+### Space Detection
+Define how to categorize your documentation:
+```python
+def determine_space(self, url):
+    if "/api/" in url:
+        return "api-docs"
+    elif "/tutorials/" in url:
+        return "tutorials"
+    return "general"
+```
+
+## 📝 Requirements
+
+- **Python 3.8+**
+- **Playwright** for JavaScript rendering
+- **BeautifulSoup4** for HTML parsing
+- **Rich** for console output
+- **PyYAML** for metadata handling
+- **Ollama + Llama 3.2 Vision** (analyzer only)
+
+## 🔧 Extending the Tools
+
+### Adding Authentication Methods
+To support OAuth, SAML, or other authentication:
+1. Modify `_authenticate()` method
+2. Update session/cookie handling
+3. Adjust the initial authentication URL pattern
+
+### Custom Content Processing
+To handle specific documentation formats:
+1. Update `clean_content()` for your HTML structure
+2. Modify `extract_sections()` for custom layouts
+3. Adjust chunking logic in `create_chunks()`
+
+### Output Format Customization
+To generate different output formats:
+1. Modify `save_chunk()` for new file formats
+2. Update metadata structure in `extract_metadata()`
+3. Adjust the index generation logic
+
+## 🤝 Contributing
+
+Feel free to extend these tools for your specific needs:
+- Add new authentication methods
+- Customize content cleaning rules
+- Implement additional output formats
+- Create specialized analyzers
+
+## 📄 License
+
+This project is provided as-is for documentation analysis and processing purposes.
