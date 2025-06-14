@@ -72,3 +72,6 @@ dmypy.json
 *.xlsx
 output/
 temp/
+rag_output/
+gk8_doc_analysis.json
+gk8_doc_summary.md
