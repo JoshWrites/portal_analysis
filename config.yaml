@@ -1,0 +1,19 @@
+# Documentation Analysis Configuration
+# This file contains platform-specific variables that can be customized for different organizations
+
+platform:
+  name: "PLATFORM_NAME"
+  docs_base_url: "docs.example.com"
+  api_version: "v15"
+  help_center_name: "Help Center"
+  
+# Branding elements
+branding:
+  logo_alt_text: "Platform Logo"
+  product_description: "Cryptocurrency custody platform"
+  
+# Analysis settings
+analysis:
+  company_name_placeholder: "{{COMPANY_NAME}}"
+  url_placeholder: "{{DOCS_BASE_URL}}"
+  version_placeholder: "{{API_VERSION}}"

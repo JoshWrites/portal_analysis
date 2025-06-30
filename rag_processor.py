@@ -15,11 +15,18 @@ from datetime import datetime
 from pathlib import Path
 import yaml
 
+# Try to import tiktoken for accurate token counting
+try:
+    import tiktoken
+    TIKTOKEN_AVAILABLE = True
+except ImportError:
+    TIKTOKEN_AVAILABLE = False
+
 console = Console()
 
 class RagProcessor:
     def __init__(self, jwt_token, output_dir="rag_output", 
-                 chunk_size_target=1000, debug=False):
+                 chunk_size_target=800, debug=False):
         self.jwt_token = jwt_token
         self.base_url = ""  # Will be set from first URL
         self.headers = {
@@ -31,11 +38,11 @@ class RagProcessor:
         self.output_dir = Path(output_dir)
         self.debug = debug
         
-        # Chunking configuration
-        self.CHUNK_SIZE_MIN = 300
-        self.CHUNK_SIZE_TARGET = chunk_size_target
-        self.CHUNK_SIZE_MAX = 1500
-        self.CHUNK_OVERLAP = 100
+        # Chunking configuration - optimized for better coherence
+        self.CHUNK_SIZE_MIN = 500      # Increased from 300
+        self.CHUNK_SIZE_TARGET = 800   # Decreased from 1000 for better coherence
+        self.CHUNK_SIZE_MAX = 1200     # Decreased from 1500
+        self.CHUNK_OVERLAP = 150       # Increased from 100 for better context
         self.OUTPUT_FORMAT = "markdown"
         self.PRESERVE_LINKS = True
         self.INCLUDE_IMAGES = True
@@ -88,10 +95,8 @@ class RagProcessor:
             # Set timeouts
             self.page.set_default_timeout(15000)  # 15 seconds
             
-            # Authenticate immediately after browser setup
-            self._authenticate()
-            
-            console.print("[green]✓ Playwright browser ready and authenticated[/green]")
+            # Don't authenticate here - wait until we have the base URL
+            console.print("[green]✓ Playwright browser ready[/green]")
                 
         except Exception as e:
             console.print(f"[red]Playwright setup failed:[/red] {str(e)[:100]}...")
@@ -343,6 +348,10 @@ class RagProcessor:
             parsed = urlparse(start_urls[0])
             self.base_url = f"{parsed.scheme}://{parsed.netloc}"
             console.print(f"[dim]Base URL set to: {self.base_url}[/dim]")
+            
+            # Now that we have the base URL, authenticate if we haven't already
+            if self.page and not self.authenticated:
+                self._authenticate()
         
         # Normalize start URLs
         normalized_starts = [self.normalize_url(url) for url in start_urls]
@@ -547,10 +556,21 @@ class RagProcessor:
         return sections
     
     def estimate_tokens(self, text):
-        """Rough token counting for chunk sizing (approximation)"""
-        # Simple approximation: ~4 characters per token on average
-        # This is rough but good enough for chunking purposes
-        return len(text) // 4
+        """More accurate token counting using tiktoken or improved estimation"""
+        if TIKTOKEN_AVAILABLE:
+            try:
+                # Use cl100k_base encoding (GPT-4 compatible)
+                if not hasattr(self, '_encoding'):
+                    self._encoding = tiktoken.get_encoding("cl100k_base")
+                return len(self._encoding.encode(text))
+            except Exception as e:
+                if self.debug:
+                    console.print(f"[yellow]Tiktoken error: {e}, falling back to estimation[/yellow]")
+        
+        # Improved fallback estimation
+        # Better estimation: ~0.75 words per token, ~5 chars per word
+        # So approximately 3.75 characters per token
+        return int(len(text) / 3.75)
     
     def create_chunks(self, content, metadata, base_title=""):
         """Split content into logical chunks preserving context"""
@@ -560,100 +580,47 @@ class RagProcessor:
         if not sections:
             return chunks
         
-        current_chunk = {
-            'content': '',
-            'sections': [],
-            'token_count': 0
-        }
+        # Group related sections together
+        semantic_groups = self._group_related_sections(sections)
         
-        for section in sections:
-            section_tokens = self.estimate_tokens(section['content'])
+        for group in semantic_groups:
+            group_tokens = sum(self.estimate_tokens(s['content']) for s in group)
             
-            # If this section alone is too large, split it
-            if section_tokens > self.CHUNK_SIZE_MAX:
-                # First, save current chunk if it has content
-                if current_chunk['content']:
-                    chunks.append(current_chunk)
-                    current_chunk = {
-                        'content': '',
-                        'sections': [],
-                        'token_count': 0
-                    }
-                
-                # Split large section into smaller chunks
-                paragraphs = section['content'].split('\n\n')
-                temp_content = f"# {section['title']}\n\n" if section['title'] != 'Content' else ""
-                temp_tokens = self.estimate_tokens(temp_content)
-                
-                for para in paragraphs:
-                    para_tokens = self.estimate_tokens(para)
-                    
-                    if temp_tokens + para_tokens > self.CHUNK_SIZE_TARGET:
-                        # Save current temp chunk
-                        if temp_content.strip():
-                            chunks.append({
-                                'content': temp_content.strip(),
-                                'sections': [section['title']],
-                                'token_count': temp_tokens
-                            })
-                        temp_content = f"# {section['title']}\n\n{para}\n\n"
-                        temp_tokens = self.estimate_tokens(temp_content)
-                    else:
-                        temp_content += f"{para}\n\n"
-                        temp_tokens += para_tokens
-                
-                # Add remaining content
-                if temp_content.strip():
-                    chunks.append({
-                        'content': temp_content.strip(),
-                        'sections': [section['title']],
-                        'token_count': temp_tokens
-                    })
-                    
-            # If adding this section would exceed target, start new chunk
-            elif current_chunk['token_count'] + section_tokens > self.CHUNK_SIZE_TARGET:
-                # Save current chunk if it meets minimum size
-                if current_chunk['token_count'] >= self.CHUNK_SIZE_MIN:
-                    chunks.append(current_chunk)
-                    # Start new chunk with overlap
-                    overlap_content = self._get_overlap_content(current_chunk['content'])
-                    current_chunk = {
-                        'content': overlap_content + f"\n\n# {section['title']}\n\n{section['content']}",
-                        'sections': [section['title']],
-                        'token_count': self.estimate_tokens(overlap_content) + section_tokens
-                    }
-                else:
-                    # Current chunk too small, add section anyway
-                    if section['title'] != 'Content':
-                        current_chunk['content'] += f"\n\n# {section['title']}\n\n{section['content']}"
-                    else:
-                        current_chunk['content'] += f"\n\n{section['content']}"
-                    current_chunk['sections'].append(section['title'])
-                    current_chunk['token_count'] += section_tokens
+            # If group is within limits, keep together
+            if self.CHUNK_SIZE_MIN <= group_tokens <= self.CHUNK_SIZE_MAX:
+                chunks.append(self._create_chunk_from_sections(group, metadata))
+            # If too large, split intelligently
+            elif group_tokens > self.CHUNK_SIZE_MAX:
+                chunks.extend(self._split_large_group(group, metadata))
+            # If too small, try to merge with adjacent groups
             else:
-                # Add section to current chunk
-                if section['title'] != 'Content':
-                    current_chunk['content'] += f"\n\n# {section['title']}\n\n{section['content']}"
-                else:
-                    current_chunk['content'] += f"\n\n{section['content']}"
-                current_chunk['sections'].append(section['title'])
-                current_chunk['token_count'] += section_tokens
+                # For now, just add as is - could be improved to merge small chunks
+                chunks.append(self._create_chunk_from_sections(group, metadata))
         
-        # Add final chunk if it has content
-        if current_chunk['content'].strip():
-            chunks.append(current_chunk)
-        
-        # Add metadata to each chunk
+        # Validate and finalize chunks
+        validated_chunks = []
         for i, chunk in enumerate(chunks):
             chunk['metadata'] = metadata.copy()
             chunk['metadata']['chunk_index'] = i + 1
             chunk['metadata']['total_chunks'] = len(chunks)
-            chunk['metadata']['section_titles'] = chunk['sections']
+            chunk['metadata']['section_titles'] = chunk.get('sections', [])
             
             # Clean up content
             chunk['content'] = chunk['content'].strip()
+            
+            # Validate chunk
+            is_valid, reason = self._validate_chunk(chunk)
+            if is_valid:
+                validated_chunks.append(chunk)
+            elif self.debug:
+                console.print(f"[yellow]Chunk {i+1} validation failed: {reason}[/yellow]")
         
-        return chunks
+        # Update chunk indices after validation
+        for i, chunk in enumerate(validated_chunks):
+            chunk['metadata']['chunk_index'] = i + 1
+            chunk['metadata']['total_chunks'] = len(validated_chunks)
+        
+        return validated_chunks
     
     def _get_overlap_content(self, content):
         """Get the last N tokens of content for overlap"""
@@ -662,6 +629,214 @@ class RagProcessor:
         if len(words) > overlap_words:
             return ' '.join(words[-overlap_words:])
         return content
+    
+    def _group_related_sections(self, sections):
+        """Group sections by semantic similarity"""
+        groups = []
+        current_group = []
+        
+        for i, section in enumerate(sections):
+            # Check if this section should start a new group
+            if self._is_major_boundary(section, sections[i-1] if i > 0 else None):
+                if current_group:
+                    groups.append(current_group)
+                current_group = [section]
+            else:
+                current_group.append(section)
+        
+        if current_group:
+            groups.append(current_group)
+        
+        return groups
+    
+    def _is_major_boundary(self, current_section, previous_section):
+        """Detect major content boundaries"""
+        # New H1 or H2 usually indicates major boundary
+        if current_section['level'] <= 2:
+            return True
+        
+        # Check for content type changes (code -> text, etc)
+        if previous_section:
+            prev_has_code = '```' in previous_section['content']
+            curr_has_code = '```' in current_section['content']
+            if prev_has_code != curr_has_code:
+                return True
+        
+        return False
+    
+    def _create_chunk_from_sections(self, sections, metadata):
+        """Create a chunk from a list of sections"""
+        content = ""
+        section_titles = []
+        
+        for section in sections:
+            if section['title'] != 'Content':
+                content += f"\n\n# {section['title']}\n\n{section['content']}"
+            else:
+                content += f"\n\n{section['content']}"
+            section_titles.append(section['title'])
+        
+        return {
+            'content': content.strip(),
+            'sections': section_titles,
+            'token_count': self.estimate_tokens(content)
+        }
+    
+    def _extract_code_blocks(self, content):
+        """Extract code blocks from content"""
+        code_blocks = []
+        parts = content.split('```')
+        
+        for i in range(1, len(parts), 2):
+            if i < len(parts):
+                code_block = f"```{parts[i]}```"
+                code_blocks.append({
+                    'content': code_block,
+                    'tokens': self.estimate_tokens(code_block)
+                })
+        
+        return code_blocks
+    
+    def _split_large_group(self, group, metadata):
+        """Split large groups while preserving code blocks"""
+        chunks = []
+        current_chunk_content = ""
+        current_chunk_sections = []
+        current_tokens = 0
+        
+        for section in group:
+            # Check if section contains code blocks
+            if '```' in section['content']:
+                # If current chunk has content, save it first
+                if current_chunk_content and current_tokens >= self.CHUNK_SIZE_MIN:
+                    chunks.append({
+                        'content': current_chunk_content.strip(),
+                        'sections': current_chunk_sections,
+                        'token_count': current_tokens
+                    })
+                    current_chunk_content = ""
+                    current_chunk_sections = []
+                    current_tokens = 0
+                
+                # Process section with code blocks
+                section_parts = section['content'].split('```')
+                text_before = section_parts[0]
+                
+                # Add section header and text before code
+                if section['title'] != 'Content':
+                    current_chunk_content = f"# {section['title']}\n\n{text_before}"
+                else:
+                    current_chunk_content = text_before
+                current_chunk_sections = [section['title']]
+                current_tokens = self.estimate_tokens(current_chunk_content)
+                
+                # Process code blocks
+                for i in range(1, len(section_parts), 2):
+                    if i < len(section_parts):
+                        code_block = f"```{section_parts[i]}```"
+                        code_tokens = self.estimate_tokens(code_block)
+                        
+                        # Check if adding code block exceeds limit
+                        if current_tokens + code_tokens > self.CHUNK_SIZE_MAX:
+                            # Save current chunk
+                            if current_chunk_content.strip():
+                                chunks.append({
+                                    'content': current_chunk_content.strip(),
+                                    'sections': current_chunk_sections,
+                                    'token_count': current_tokens
+                                })
+                            # Start new chunk with code block
+                            current_chunk_content = f"# {section['title']} (continued)\n\n{code_block}"
+                            current_chunk_sections = [section['title']]
+                            current_tokens = self.estimate_tokens(current_chunk_content)
+                        else:
+                            current_chunk_content += f"\n\n{code_block}"
+                            current_tokens += code_tokens
+                        
+                        # Add text after code block if exists
+                        if i + 1 < len(section_parts):
+                            text_after = section_parts[i + 1]
+                            text_tokens = self.estimate_tokens(text_after)
+                            if current_tokens + text_tokens <= self.CHUNK_SIZE_MAX:
+                                current_chunk_content += f"\n\n{text_after}"
+                                current_tokens += text_tokens
+            else:
+                # Regular text section - can be split by paragraphs
+                section_tokens = self.estimate_tokens(section['content'])
+                
+                if current_tokens + section_tokens > self.CHUNK_SIZE_TARGET:
+                    # Save current chunk if it meets minimum
+                    if current_tokens >= self.CHUNK_SIZE_MIN:
+                        chunks.append({
+                            'content': current_chunk_content.strip(),
+                            'sections': current_chunk_sections,
+                            'token_count': current_tokens
+                        })
+                        # Start new chunk with overlap
+                        overlap_content = self._get_overlap_content(current_chunk_content)
+                        if section['title'] != 'Content':
+                            current_chunk_content = overlap_content + f"\n\n# {section['title']}\n\n{section['content']}"
+                        else:
+                            current_chunk_content = overlap_content + f"\n\n{section['content']}"
+                        current_chunk_sections = [section['title']]
+                        current_tokens = self.estimate_tokens(current_chunk_content)
+                    else:
+                        # Add to current chunk anyway
+                        if section['title'] != 'Content':
+                            current_chunk_content += f"\n\n# {section['title']}\n\n{section['content']}"
+                        else:
+                            current_chunk_content += f"\n\n{section['content']}"
+                        current_chunk_sections.append(section['title'])
+                        current_tokens += section_tokens
+                else:
+                    # Add to current chunk
+                    if section['title'] != 'Content':
+                        current_chunk_content += f"\n\n# {section['title']}\n\n{section['content']}"
+                    else:
+                        current_chunk_content += f"\n\n{section['content']}"
+                    current_chunk_sections.append(section['title'])
+                    current_tokens += section_tokens
+        
+        # Add final chunk if it has content
+        if current_chunk_content.strip():
+            chunks.append({
+                'content': current_chunk_content.strip(),
+                'sections': current_chunk_sections,
+                'token_count': current_tokens
+            })
+        
+        return chunks
+    
+    def _validate_chunk(self, chunk):
+        """Ensure chunk meets quality standards"""
+        content = chunk['content']
+        tokens = chunk['token_count']
+        
+        # Check size constraints
+        if tokens < self.CHUNK_SIZE_MIN:
+            # Allow smaller chunks if they're the only chunk or contain important content
+            if chunk['metadata'].get('total_chunks', 1) == 1:
+                return True, "Single chunk - size allowed"
+            # Allow if it contains code blocks or important headers
+            if '```' in content:
+                return True, "Contains important content"
+            return False, f"Chunk too small ({tokens} tokens)"
+        
+        if tokens > self.CHUNK_SIZE_MAX:
+            return False, f"Chunk too large ({tokens} tokens)"
+        
+        # Check for incomplete code blocks
+        if content.count('```') % 2 != 0:
+            return False, "Incomplete code block"
+        
+        # Check for orphaned content
+        stripped_content = content.strip()
+        orphaned_starts = ['else:', 'elif:', '}', ']', ')', 'except:', 'finally:', 'catch']
+        for orphan in orphaned_starts:
+            if stripped_content.startswith(orphan):
+                return False, f"Chunk starts with orphaned code: {orphan}"
+        
+        return True, "Valid"
     
     def process_single_page(self, page_data):
         """Process one page into chunks"""
