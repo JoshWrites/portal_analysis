@@ -2,145 +2,205 @@
 
 A comprehensive suite of tools for analyzing and processing documentation websites, with special support for JavaScript-rendered portals that require authentication. This toolset helps documentation teams identify content duplication, prepare content for RAG systems, and maintain documentation quality.
 
-## 🎯 Purpose Overview
+## 🎯 Choose Your Tool
 
-### **doc_analyzer.py** - Documentation Analysis Tool
-Crawls and analyzes documentation to identify:
-- Duplicate content across different documentation spaces
-- Single-sourcing opportunities to reduce maintenance
-- Image and diagram duplication
-- Hard-coded values that should be variables
+### 📊 **Documentation Analysis Tool** (doc_analyzer.py)
+**Best for:** Finding duplicate content, identifying single-sourcing opportunities
+**You need:** Gaming PC with graphics card, 16GB+ RAM
+**What it does:**
+- Analyzes documentation using AI to find duplicate content
+- Identifies single-sourcing opportunities to reduce maintenance
+- Finds duplicate images and diagrams
+- Discovers hard-coded values that should be variables
 
-### **rag_processor.py** - RAG Content Processor
-Transforms documentation into optimized chunks for RAG systems:
+### 🤖 **RAG Content Processor** (rag_processor.py)  
+**Best for:** Preparing documentation for chatbots and knowledge bases
+**You need:** Any modern computer, 8GB+ RAM
+**What it does:**
+- Transforms documentation into optimized chunks for RAG systems
 - Cleans HTML content while preserving semantic structure
 - Creates intelligently-sized chunks with metadata
 - Generates markdown files ready for knowledge bases
-- Maintains context and relationships between chunks
+
+---
+
+**👆 Pick the tool that matches your goal and computer specs, then follow the guide for that specific tool below.**
 
 ## ⚠️ Important Access Requirement
 
 **You must have valid access credentials to your documentation portal.** These tools require authentication to access protected documentation. Without proper credentials (e.g., JWT token), the tools will only be able to scrape publicly accessible pages, which may result in incomplete or minimal analysis.
 
-## 🌐 Portal Compatibility
+<details>
+<summary><strong>🔑 How to Find Your JWT Token</strong> (click to expand if you need help identifying your JWT token)</summary>
 
-These tools are designed for documentation portals with the following characteristics:
+Your JWT token is usually found in the URL when you're logged into your documentation portal. Here's how to identify it:
 
-### **Ideal For:**
-- **JavaScript-rendered documentation sites** (React, Vue, Angular-based)
-- **Static site generators** with authentication (Docusaurus, GitBook, MkDocs)
-- **Enterprise documentation portals** with JWT/session-based security
-- **API documentation platforms** (Swagger UI, Redoc, custom solutions)
-- **Knowledge bases** with structured content and navigation
+**Example URL after logging in:**
+```
+https://docs.yourcompany.com/dashboard?jwt=eyJhbGciOiJIUzI1NiIs...SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c&other=params
+```
 
-### **Key Requirements:**
-- **JWT token authentication** (passed via URL parameters or headers)
-- **HTML-based content** (not PDF-only or binary formats)
-- **Consistent URL structure** for content categorization
-- **Server-side or client-side rendering** (both supported via Playwright)
+**Your JWT token is this part:**
+```
+eyJhbGciOiJIUzI1NiIs...SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c
+                    ↑ JWT token starts here ↑                                    ↑ JWT token ends here ↑
+```
 
-### **Authentication Support:**
-The tools currently support JWT authentication where tokens are passed as URL parameters (e.g., `?jwt=token`). The authentication flow:
-1. Initial request with JWT token establishes session
-2. Browser cookies maintain authentication state
-3. Subsequent requests use session cookies
+**To get your token:**
+1. Log into your documentation portal in a web browser
+2. Look at the URL in your browser's address bar
+3. Find the part that says `jwt=` followed by a long string of characters
+4. Copy everything after `jwt=` up to the next `&` (or end of URL if there's no `&`)
+5. That's your JWT token - paste it when the tool asks for it
 
-### **Not Suitable For:**
-- Sites requiring CAPTCHA or 2FA interaction
-- Documentation behind complex SSO flows (without JWT)
-- Binary-only documentation (PDFs without HTML)
-- Rate-limited APIs without HTML documentation
+**Common JWT token locations:**
+- In the URL: `?jwt=YOUR_TOKEN_HERE`
+- In cookies (check browser developer tools → Application → Cookies)
+- In local storage (check browser developer tools → Application → Local Storage)
+
+</details>
+
 
 ## 💻 Hardware Requirements
 
-### doc_analyzer.py - Documentation Analysis Tool
+<details>
+<summary><strong>📋 System Requirements</strong> (click to expand to check if your computer can run these tools)</summary>
 
-#### Minimum Requirements:
-- **CPU**: 4 cores (for Ollama LLM inference)
-- **RAM**: 16GB (8GB for Ollama model + system overhead)
-- **GPU**: Discrete GPU with 8GB VRAM
-  - NVIDIA: GTX 1070 or newer
-  - AMD: RX 6600 or newer (requires ROCm installation)
-- **Storage**: 20GB free (for Ollama model storage)
-- **Network**: Stable broadband connection
+### 🤖 For Documentation Analysis Tool (doc_analyzer.py)
+**This tool uses AI and needs more powerful hardware:**
 
-#### Recommended Requirements:
-- **CPU**: 8+ cores (faster LLM inference)
-- **RAM**: 32GB (smooth operation with large documentation)
-- **GPU**: Discrete GPU with 12GB+ VRAM
-  - NVIDIA: RTX 3060 12GB, RTX 4060 Ti 16GB, or better
-  - AMD: RX 6700 XT, RX 7600 XT or better (requires ROCm installation)
-- **Storage**: 50GB+ free (model + analysis outputs)
-- **Network**: High-speed connection (faster crawling)
+**✅ Your computer needs:**
+- **Modern processor** - Intel i5/i7 or AMD Ryzen 5/7 from the last 5 years
+- **16GB RAM minimum** (32GB recommended for large documentation sites)
+- **Gaming graphics card** with 8GB+ memory (NVIDIA GTX 1070 or newer recommended)
+- **20-50GB free disk space** (for the AI model and analysis results)
+- **Stable internet connection**
 
-### rag_processor.py - RAG Content Processor
+**❓ Not sure about your graphics card?**
+- Check Windows Settings → System → Display → Advanced display settings
+- Or look up your computer model online to see specs
+- **No gaming graphics card?** The tool might run slowly on CPU only, but it will still work
 
-#### Minimum Requirements:
-- **CPU**: 2 cores
-- **RAM**: 8GB
-- **GPU**: None required (CPU-only tool)
-- **Storage**: 10GB free
-- **Network**: Stable broadband connection
+### 📝 For RAG Content Processor (rag_processor.py)  
+**This tool is much lighter and works on most computers:**
 
-#### Recommended Requirements:
-- **CPU**: 4+ cores (faster processing)
-- **RAM**: 16GB (handle larger documentation sets)
-- **GPU**: Not needed
-- **Storage**: 20GB+ free (for output chunks)
-- **Network**: High-speed connection
+**✅ Your computer needs:**
+- **Any modern computer** from the last 5 years
+- **8GB RAM minimum** (16GB recommended for large sites)
+- **No special graphics card needed**
+- **10-20GB free disk space**
+- **Stable internet connection**
 
-### GPU Notes:
-- **NVIDIA GPUs**: Work out-of-the-box with Ollama after CUDA drivers installation
-- **AMD GPUs**: Require ROCm installation for Ollama GPU acceleration
-- **Intel Arc GPUs**: Currently not supported by Ollama
-- The doc_analyzer tool benefits significantly from GPU acceleration for the Vision LLM model
+### 🖥️ What kind of computer do I have?
+**Windows:** Settings → System → About  
+**Mac:** Apple Menu → About This Mac  
+**Don't worry if your specs aren't perfect** - start with smaller documentation sites to test, and consider using only the RAG processor if your computer struggles with the AI analysis tool.
+
+### 📝 Software Requirements
+- **Python 3.8 or newer** - Download from [python.org](https://python.org)
+- **Playwright** - For controlling web browsers automatically
+- **BeautifulSoup4** - For reading HTML content
+- **Rich** - For pretty console output
+- **PyYAML** - For handling configuration files
+- **Ollama + Llama 3.2 Vision** - AI model (only needed for doc_analyzer.py)
+
+</details>
 
 ## 📦 Installation
 
-1. **Clone the repository**:
+### Prerequisites
+- **Python 3.8 or newer** - Download from [python.org](https://python.org) if not installed
+- **Command line/Terminal access** - Use Terminal on Mac/Linux or Command Prompt on Windows
+
+### Step-by-Step Setup
+
+<details>
+<summary><strong>🤔 What is a Python virtual environment?</strong> (click to expand for explanation)</summary>
+
+A virtual environment is like a separate workspace for this project that keeps its files separate from other Python projects on your computer. Think of it as creating a dedicated folder where all the tools needed for this project will be installed, without affecting anything else on your system.
+
+**Why do we need it?**
+- Prevents conflicts between different projects
+- Keeps your system clean and organized
+- Makes it easy to share the project with others
+
+</details>
+
+1. **Download the project files**:
    ```bash
    git clone <repository-url>
    cd portal_analysis
    ```
+   *If you don't have git, you can download the project as a ZIP file and extract it.*
 
-2. **Create and activate virtual environment**:
+2. **Create a dedicated workspace** (virtual environment):
    ```bash
    python3 -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
    ```
+   *This creates a folder called 'venv' where all project tools will be stored.*
 
-3. **Install dependencies**:
+3. **Activate the workspace**:
+   ```bash
+   # On Mac/Linux:
+   source venv/bin/activate
+   
+   # On Windows:
+   venv\Scripts\activate
+   ```
+   *You'll know it worked when you see (venv) at the start of your command line.*
+
+4. **Install the required tools**:
    ```bash
    pip install -r requirements.txt
    ```
+   *This downloads and installs all the tools the project needs.*
 
-4. **Install Playwright browsers**:
+5. **Install web browser for automation**:
    ```bash
    playwright install chromium
    ```
+   *This installs a special browser that the tools can control automatically.*
 
-5. **Set up Ollama** (only for doc_analyzer):
+6. **Set up AI analysis** (only needed for doc_analyzer.py):
+   - Visit [ollama.ai](https://ollama.ai) and follow their installation instructions
+   - After installing Ollama, run:
    ```bash
-   # Install Ollama following instructions at https://ollama.ai
    ollama pull llama3.2-vision:11b
    ```
+   *This downloads an AI model for analyzing documentation content.*
 
 ## 🚀 Quick Start
 
+### Before You Begin
+1. **Make sure your virtual environment is activated** - you should see `(venv)` at the start of your command line
+2. **Have your JWT token ready** - see the expandable section above if you need help finding it
+3. **Be logged into your documentation portal** in a web browser
+
 ### For Documentation Analysis:
 ```bash
-./doc_analyzer.py
-# Enter JWT token when prompted
-# Provide URLs to analyze
+python doc_analyzer.py
 ```
+
+**What happens next:**
+1. The tool will ask for your JWT token - paste it and press Enter
+2. It will ask if you want debug mode - type `n` and press Enter (unless you're troubleshooting)
+3. Enter the URLs you want to analyze, one per line
+4. Press Enter on an empty line when you're done adding URLs
+5. The tool will start crawling and analyzing your documentation
+6. Results will be saved as `doc_analysis.json` and `doc_summary.md`
 
 ### For RAG Processing:
 ```bash
-./rag_processor.py
-# Enter JWT token when prompted
-# Specify output directory (default: rag_output)
-# Provide URLs to process
+python rag_processor.py
 ```
+
+**What happens next:**
+1. The tool will ask for your JWT token - paste it and press Enter
+2. It will ask if you want debug mode - type `n` and press Enter (unless you're troubleshooting)
+3. It will ask for an output directory - press Enter to use the default (`rag_output`)
+4. Enter the URLs you want to process, one per line
+5. Press Enter on an empty line when you're done adding URLs
+6. The tool will create markdown files in the output directory, ready for your knowledge base
 
 <details>
 <summary><h2>📊 Documentation Analyzer (doc_analyzer.py)</h2></summary>
@@ -157,25 +217,20 @@ The Documentation Analyzer uses AI to comprehensively analyze your documentation
 
 ### How It Works
 
-1. **Authentication & Setup**
-   - Uses JWT token to authenticate with the portal
-   - Establishes browser session with Playwright
-   - Maintains cookies for subsequent requests
-
-2. **Crawling Phase**
+1. **Crawling Phase**
    ```
    Starting BFS crawl from 2 seed URLs
    Crawling... Queue: 45 | Visited: 123
    Progress: 280 pages crawled, 58 in queue
    ```
 
-3. **Analysis Phase**
+2. **Analysis Phase**
    - **Content Hashing**: Creates sliding window hashes for deep comparison
    - **AI Evaluation**: Uses Ollama to analyze similar content pairs
    - **Image Analysis**: Perceptual hashing + vision AI for images
    - **Diagram Extraction**: Identifies and compares Mermaid diagrams
 
-4. **Output Generation**
+3. **Output Generation**
    - `doc_analysis.json`: Complete analysis data
    - `doc_summary.md`: Human-readable findings
 
@@ -183,7 +238,6 @@ The Documentation Analyzer uses AI to comprehensively analyze your documentation
 ```bash
 ./doc_analyzer.py
 
-Enter your JWT token: eyJhbGciOiJIUzI1NiIs...
 Enable debug mode? (y/n): n
 Enter URLs to crawl (one per line, empty line to finish):
 > https://docs.yourcompany.com
@@ -281,7 +335,6 @@ The RAG Processor transforms your documentation into optimized chunks for use wi
 ```bash
 ./rag_processor.py
 
-Enter your JWT token: eyJhbGciOiJIUzI1NiIs...
 Enable debug mode? (y/n): n
 Output directory (default: rag_output): my_docs
 Enter URLs to crawl (one per line, empty line to finish):
@@ -362,15 +415,6 @@ The API uses JWT tokens for authentication. All requests must include a valid to
 
 ## 🛠️ Common Configuration
 
-### Authentication Setup
-Both tools support JWT authentication where tokens are passed as URL parameters:
-```python
-# Current implementation
-auth_url = f"{base_url}?jwt={jwt_token}&reload"
-```
-
-To adapt for other authentication methods, modify the `_authenticate()` method in either tool.
-
 ### URL Filtering
 Customize which pages to crawl by modifying:
 ```python
@@ -393,14 +437,67 @@ def determine_space(self, url):
     return "general"
 ```
 
-## 📝 Requirements
+## 🛠️ Troubleshooting Common Issues
 
-- **Python 3.8+**
-- **Playwright** for JavaScript rendering
-- **BeautifulSoup4** for HTML parsing
-- **Rich** for console output
-- **PyYAML** for metadata handling
-- **Ollama + Llama 3.2 Vision** (analyzer only)
+<details>
+<summary><strong>🚨 Common Problems and Solutions</strong> (click to expand)</summary>
+
+### "Command not found" or "python is not recognized"
+**Problem:** Your system can't find Python
+**Solutions:**
+- Make sure Python is installed from [python.org](https://python.org)
+- Try `python3` instead of `python`
+- On Windows, try `py` instead of `python`
+- Restart your command line/terminal after installing Python
+
+### "Permission denied" errors
+**Problem:** Your user account doesn't have permission to install things
+**Solutions:**
+- On Mac/Linux: Try adding `sudo` before the command (e.g., `sudo pip install...`)
+- On Windows: Run Command Prompt as Administrator
+- Use `pip install --user` instead of just `pip install`
+
+### "(venv) doesn't appear in my command line"
+**Problem:** Virtual environment isn't activated
+**Solutions:**
+- Make sure you ran the activation command for your operating system
+- Try running the activation command again
+- Navigate to the project folder first, then activate
+
+
+### Tool runs but finds no pages
+**Problem:** Authentication isn't working or URLs are incorrect
+**Solutions:**
+- Verify you can access the URLs in your browser while logged in
+- Try visiting the URLs with `?jwt=YOUR_TOKEN` manually in your browser
+- Check that the URLs don't require additional authentication steps
+- Make sure the URLs contain actual documentation content
+
+### "ModuleNotFoundError" or import errors
+**Problem:** Required packages aren't installed
+**Solutions:**
+- Make sure your virtual environment is activated (you should see `(venv)`)
+- Run `pip install -r requirements.txt` again
+- Try `pip install --upgrade pip` first, then retry the installation
+
+### Tool is very slow or uses too much memory
+**Problem:** Large documentation site or insufficient resources
+**Solutions:**
+- Start with a smaller set of URLs to test
+- Close other applications to free up memory
+- Consider using the RAG processor first (it's less resource-intensive)
+- For doc_analyzer: ensure you have enough GPU memory for the AI model
+
+### Can't install Ollama or AI model download fails
+**Problem:** Network issues or system compatibility
+**Solutions:**
+- Check your internet connection
+- Try downloading during off-peak hours
+- Ensure you have enough disk space (20GB+ recommended)
+- Check Ollama's system requirements on their website
+
+</details>
+
 
 ## 🔧 Extending the Tools
 
