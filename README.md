@@ -2,9 +2,9 @@
 
 A comprehensive suite of tools for analyzing and processing documentation websites, with special support for JavaScript-rendered portals that require authentication. This toolset helps documentation teams identify content duplication, prepare content for RAG systems, and maintain documentation quality.
 
-## 🎯 Choose Your Tool
+## Choose Your Tool
 
-### 📊 **Documentation Analysis Tool** (doc_analyzer.py)
+### **Documentation Analysis Tool** (doc_analyzer.py)
 **Best for:** Finding duplicate content, identifying single-sourcing opportunities
 **You need:** Gaming PC with graphics card, 16GB+ RAM
 **What it does:**
@@ -13,7 +13,7 @@ A comprehensive suite of tools for analyzing and processing documentation websit
 - Finds duplicate images and diagrams
 - Discovers hard-coded values that should be variables
 
-### 🤖 **RAG Content Processor** (rag_processor.py)  
+### **RAG Content Processor** (rag_processor.py)  
 **Best for:** Preparing documentation for chatbots and knowledge bases
 **You need:** Any modern computer, 8GB+ RAM
 **What it does:**
@@ -24,14 +24,14 @@ A comprehensive suite of tools for analyzing and processing documentation websit
 
 ---
 
-**👆 Pick the tool that matches your goal and computer specs, then follow the guide for that specific tool below.**
+**Pick the tool that matches your goal and computer specs, then follow the guide for that specific tool below.**
 
-## ⚠️ Important Access Requirement
+## Important Access Requirement
 
 **You must have valid access credentials to your documentation portal.** These tools require authentication to access protected documentation. Without proper credentials (e.g., JWT token), the tools will only be able to scrape publicly accessible pages, which may result in incomplete or minimal analysis.
 
 <details>
-<summary><strong>🔑 How to Find Your JWT Token</strong> (click to expand if you need help identifying your JWT token)</summary>
+<summary><strong>How to Find Your JWT Token</strong> (click to expand if you need help identifying your JWT token)</summary>
 
 Your JWT token is usually found in the URL when you're logged into your documentation portal. Here's how to identify it:
 
@@ -61,42 +61,42 @@ eyJhbGciOiJIUzI1NiIs...SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c
 </details>
 
 
-## 💻 Hardware Requirements
+## Hardware Requirements
 
 <details>
-<summary><strong>📋 System Requirements</strong> (click to expand to check if your computer can run these tools)</summary>
+<summary><strong>System Requirements</strong> (click to expand to check if your computer can run these tools)</summary>
 
-### 🤖 For Documentation Analysis Tool (doc_analyzer.py)
+### For Documentation Analysis Tool (doc_analyzer.py)
 **This tool uses AI and needs more powerful hardware:**
 
-**✅ Your computer needs:**
+**Your computer needs:**
 - **Modern processor** - Intel i5/i7 or AMD Ryzen 5/7 from the last 5 years
 - **16GB RAM minimum** (32GB recommended for large documentation sites)
 - **Gaming graphics card** with 8GB+ memory (NVIDIA GTX 1070 or newer recommended)
 - **20-50GB free disk space** (for the AI model and analysis results)
 - **Stable internet connection**
 
-**❓ Not sure about your graphics card?**
+**Not sure about your graphics card?**
 - Check Windows Settings → System → Display → Advanced display settings
 - Or look up your computer model online to see specs
 - **No gaming graphics card?** The tool might run slowly on CPU only, but it will still work
 
-### 📝 For RAG Content Processor (rag_processor.py)  
+### For RAG Content Processor (rag_processor.py)  
 **This tool is much lighter and works on most computers:**
 
-**✅ Your computer needs:**
+**Your computer needs:**
 - **Any modern computer** from the last 5 years
 - **8GB RAM minimum** (16GB recommended for large sites)
 - **No special graphics card needed**
 - **10-20GB free disk space**
 - **Stable internet connection**
 
-### 🖥️ What kind of computer do I have?
+### What kind of computer do I have?
 **Windows:** Settings → System → About  
 **Mac:** Apple Menu → About This Mac  
 **Don't worry if your specs aren't perfect** - start with smaller documentation sites to test, and consider using only the RAG processor if your computer struggles with the AI analysis tool.
 
-### 📝 Software Requirements
+### Software Requirements
 - **Python 3.8 or newer** - Download from [python.org](https://python.org)
 - **Playwright** - For controlling web browsers automatically
 - **BeautifulSoup4** - For reading HTML content
@@ -106,7 +106,7 @@ eyJhbGciOiJIUzI1NiIs...SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c
 
 </details>
 
-## 📦 Installation
+## Installation
 
 ### Prerequisites
 - **Python 3.8 or newer** - Download from [python.org](https://python.org) if not installed
@@ -115,7 +115,7 @@ eyJhbGciOiJIUzI1NiIs...SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c
 ### Step-by-Step Setup
 
 <details>
-<summary><strong>🤔 What is a Python virtual environment?</strong> (click to expand for explanation)</summary>
+<summary><strong>What is a Python virtual environment?</strong> (click to expand for explanation)</summary>
 
 A virtual environment is like a separate workspace for this project that keeps its files separate from other Python projects on your computer. Think of it as creating a dedicated folder where all the tools needed for this project will be installed, without affecting anything else on your system.
 
@@ -169,7 +169,7 @@ A virtual environment is like a separate workspace for this project that keeps i
    ```
    *This downloads an AI model for analyzing documentation content.*
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Before You Begin
 1. **Make sure your virtual environment is activated** - you should see `(venv)` at the start of your command line
@@ -203,7 +203,7 @@ python rag_processor.py
 6. The tool will create markdown files in the output directory, ready for your knowledge base
 
 <details>
-<summary><h2>📊 Documentation Analyzer (doc_analyzer.py)</h2></summary>
+<summary><h2>Documentation Analyzer (doc_analyzer.py)</h2></summary>
 
 ### Overview
 The Documentation Analyzer uses AI to comprehensively analyze your documentation portal, identifying opportunities for content consolidation and improvement.
@@ -283,7 +283,7 @@ Analysis complete!
 </details>
 
 <details>
-<summary><h2>🤖 RAG Processor (rag_processor.py)</h2></summary>
+<summary><h2>RAG Processor (rag_processor.py)</h2></summary>
 
 ### Overview
 The RAG Processor transforms your documentation into optimized chunks for use with Retrieval-Augmented Generation systems like Msty's Knowledge Stack or custom RAG implementations.
@@ -413,7 +413,7 @@ The API uses JWT tokens for authentication. All requests must include a valid to
    - **Support Systems**: Enhanced ticket resolution
 </details>
 
-## 🛠️ Common Configuration
+## Common Configuration
 
 ### URL Filtering
 Customize which pages to crawl by modifying:
@@ -437,10 +437,10 @@ def determine_space(self, url):
     return "general"
 ```
 
-## 🛠️ Troubleshooting Common Issues
+## Troubleshooting Common Issues
 
 <details>
-<summary><strong>🚨 Common Problems and Solutions</strong> (click to expand)</summary>
+<summary><strong>Common Problems and Solutions</strong> (click to expand)</summary>
 
 ### "Command not found" or "python is not recognized"
 **Problem:** Your system can't find Python
@@ -499,7 +499,7 @@ def determine_space(self, url):
 </details>
 
 
-## 🔧 Extending the Tools
+## Extending the Tools
 
 ### Adding Authentication Methods
 To support OAuth, SAML, or other authentication:
@@ -519,7 +519,7 @@ To generate different output formats:
 2. Update metadata structure in `extract_metadata()`
 3. Adjust the index generation logic
 
-## 🤝 Contributing
+## Contributing
 
 Feel free to extend these tools for your specific needs:
 - Add new authentication methods
@@ -527,6 +527,6 @@ Feel free to extend these tools for your specific needs:
 - Implement additional output formats
 - Create specialized analyzers
 
-## 📄 License
+## License
 
 This project is provided as-is for documentation analysis and processing purposes.
