@@ -18,6 +18,10 @@ Transforms documentation into optimized chunks for RAG systems:
 - Generates markdown files ready for knowledge bases
 - Maintains context and relationships between chunks
 
+## ⚠️ Important Access Requirement
+
+**You must have valid access credentials to your documentation portal.** These tools require authentication to access protected documentation. Without proper credentials (e.g., JWT token), the tools will only be able to scrape publicly accessible pages, which may result in incomplete or minimal analysis.
+
 ## 🌐 Portal Compatibility
 
 These tools are designed for documentation portals with the following characteristics:
@@ -46,6 +50,50 @@ The tools currently support JWT authentication where tokens are passed as URL pa
 - Documentation behind complex SSO flows (without JWT)
 - Binary-only documentation (PDFs without HTML)
 - Rate-limited APIs without HTML documentation
+
+## 💻 Hardware Requirements
+
+### doc_analyzer.py - Documentation Analysis Tool
+
+#### Minimum Requirements:
+- **CPU**: 4 cores (for Ollama LLM inference)
+- **RAM**: 16GB (8GB for Ollama model + system overhead)
+- **GPU**: Discrete GPU with 8GB VRAM
+  - NVIDIA: GTX 1070 or newer
+  - AMD: RX 6600 or newer (requires ROCm installation)
+- **Storage**: 20GB free (for Ollama model storage)
+- **Network**: Stable broadband connection
+
+#### Recommended Requirements:
+- **CPU**: 8+ cores (faster LLM inference)
+- **RAM**: 32GB (smooth operation with large documentation)
+- **GPU**: Discrete GPU with 12GB+ VRAM
+  - NVIDIA: RTX 3060 12GB, RTX 4060 Ti 16GB, or better
+  - AMD: RX 6700 XT, RX 7600 XT or better (requires ROCm installation)
+- **Storage**: 50GB+ free (model + analysis outputs)
+- **Network**: High-speed connection (faster crawling)
+
+### rag_processor.py - RAG Content Processor
+
+#### Minimum Requirements:
+- **CPU**: 2 cores
+- **RAM**: 8GB
+- **GPU**: None required (CPU-only tool)
+- **Storage**: 10GB free
+- **Network**: Stable broadband connection
+
+#### Recommended Requirements:
+- **CPU**: 4+ cores (faster processing)
+- **RAM**: 16GB (handle larger documentation sets)
+- **GPU**: Not needed
+- **Storage**: 20GB+ free (for output chunks)
+- **Network**: High-speed connection
+
+### GPU Notes:
+- **NVIDIA GPUs**: Work out-of-the-box with Ollama after CUDA drivers installation
+- **AMD GPUs**: Require ROCm installation for Ollama GPU acceleration
+- **Intel Arc GPUs**: Currently not supported by Ollama
+- The doc_analyzer tool benefits significantly from GPU acceleration for the Vision LLM model
 
 ## 📦 Installation
 
