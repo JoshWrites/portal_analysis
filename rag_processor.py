@@ -18,12 +18,11 @@ import yaml
 console = Console()
 
 class RagProcessor:
-    def __init__(self, jwt_token, output_dir="rag_output", 
+    def __init__(self, zendesk_url=None, output_dir="rag_output", 
                  chunk_size_target=1000, debug=False):
-        self.jwt_token = jwt_token
+        self.zendesk_url = zendesk_url
         self.base_url = ""  # Will be set from first URL
         self.headers = {
-            "Authorization": f"Bearer {jwt_token}",
             "User-Agent": "RAG-Processor/1.0"
         }
         self.visited_urls = set()
@@ -82,11 +81,12 @@ class RagProcessor:
             console.print("[dim]Starting Playwright browser...[/dim]")
             
             self.playwright = sync_playwright().start()
-            self.browser = self.playwright.chromium.launch(headless=True)
+            # Launch browser in non-headless mode for OIDC authentication
+            self.browser = self.playwright.chromium.launch(headless=False)
             self.page = self.browser.new_page()
             
             # Set timeouts
-            self.page.set_default_timeout(15000)  # 15 seconds
+            self.page.set_default_timeout(30000)  # 30 seconds for OIDC flow
             
             # Authenticate immediately after browser setup
             self._authenticate()
@@ -99,32 +99,97 @@ class RagProcessor:
             self._cleanup_playwright()
     
     def _authenticate(self):
-        """Authenticate once using JWT to establish session cookies"""
+        """Authenticate using OIDC (Azure AD/Entra ID) for Zendesk Help Center"""
         try:
-            console.print("[dim]Authenticating with JWT...[/dim]")
+            console.print("[dim]Starting OIDC authentication for Zendesk Help Center...[/dim]")
             
-            # Initial authentication request with JWT and reload parameter
-            # Use the base URL if set, otherwise use a placeholder
-            base = self.base_url if self.base_url else "https://docs.example.com"
-            auth_url = f"{base}?jwt={self.jwt_token}&reload"
-            self.page.goto(auth_url)
+            if not self.zendesk_url:
+                console.print("[yellow]No Zendesk URL provided. Please provide the Zendesk Help Center URL.[/yellow]")
+                self.zendesk_url = input("Enter your Zendesk Help Center URL (e.g., https://yourcompany.zendesk.com/hc): ").strip()
             
-            # Wait for authentication to complete and page to load
+            # Navigate to Zendesk Help Center
+            console.print(f"[dim]Navigating to: {self.zendesk_url}[/dim]")
+            self.page.goto(self.zendesk_url)
+            
+            # Wait for page to load
             self.page.wait_for_load_state("networkidle")
             
-            # Additional wait to ensure session cookies are set
-            time.sleep(2)
-            
-            # Verify authentication worked by checking if we're not on a login page
+            # Check if we need to authenticate
             page_content = self.page.content()
-            if "login" in page_content.lower() or len(page_content) < 100000:
-                raise Exception("Authentication may have failed - got login page or minimal content")
             
-            self.authenticated = True
-            console.print("[green]✓ Authentication successful - session established[/green]")
+            # Look for signs that we need to login (login buttons, SSO links, etc.)
+            login_selectors = [
+                'a[href*="login"]',
+                'a[href*="signin"]', 
+                'button[data-testid*="login"]',
+                '.login-button',
+                '.signin-button',
+                '[data-testid="login"]',
+                'a:has-text("Sign In")',
+                'a:has-text("Login")',
+                'button:has-text("Sign In")',
+                'button:has-text("Login")'
+            ]
+            
+            login_found = False
+            for selector in login_selectors:
+                try:
+                    if self.page.locator(selector).count() > 0:
+                        console.print(f"[dim]Found login element: {selector}[/dim]")
+                        login_found = True
+                        break
+                except:
+                    continue
+            
+            if login_found:
+                console.print("[yellow]Login required. Please complete the OIDC authentication in the browser window.[/yellow]")
+                console.print("[yellow]The browser window will open for you to sign in with your Azure AD credentials.[/yellow]")
+                
+                # Click the login button/link
+                for selector in login_selectors:
+                    try:
+                        if self.page.locator(selector).count() > 0:
+                            self.page.locator(selector).first.click()
+                            break
+                    except:
+                        continue
+                
+                # Wait for user to complete authentication
+                console.print("[yellow]Waiting for authentication to complete...[/yellow]")
+                console.print("[yellow]Please complete the login process in the browser window.[/yellow]")
+                
+                # Wait for redirect back to Zendesk or for the page to change
+                self.page.wait_for_load_state("networkidle", timeout=120000)  # 2 minutes timeout
+                
+                # Additional wait to ensure session is established
+                time.sleep(3)
+                
+                # Verify authentication worked
+                final_content = self.page.content()
+                if "login" in final_content.lower() or len(final_content) < 50000:
+                    console.print("[yellow]Authentication may not have completed successfully. Please check the browser window.[/yellow]")
+                    console.print("[yellow]You may need to manually complete the login process.[/yellow]")
+                    
+                    # Give user more time to complete authentication
+                    input("Press Enter after completing authentication in the browser...")
+                    
+                    # Refresh the page to get the authenticated state
+                    self.page.reload()
+                    self.page.wait_for_load_state("networkidle")
+                    final_content = self.page.content()
+                
+                if len(final_content) > 50000 and "login" not in final_content.lower():
+                    self.authenticated = True
+                    console.print("[green]✓ OIDC authentication successful - session established[/green]")
+                else:
+                    raise Exception("Authentication verification failed - still seeing login page or minimal content")
+            else:
+                # No login required, already authenticated
+                console.print("[green]✓ Already authenticated or no authentication required[/green]")
+                self.authenticated = True
             
         except Exception as e:
-            console.print(f"[red]Authentication failed:[/red] {e}")
+            console.print(f"[red]OIDC authentication failed:[/red] {e}")
             self.authenticated = False
     
     def _cleanup_playwright(self):
@@ -788,8 +853,8 @@ class RagProcessor:
 
 def main():
     """Main function that runs the entire processing pipeline"""
-    # Get JWT token
-    JWT_TOKEN = input("Enter your JWT token: ")
+    # Get Zendesk URL
+    zendesk_url = input("Enter your Zendesk Help Center URL (e.g., https://yourcompany.zendesk.com/hc): ").strip()
     
     # Ask about debug mode
     debug_mode = input("Enable debug mode? (y/n): ").lower() == 'y'
@@ -801,13 +866,12 @@ def main():
     
     # Initialize processor
     console.print("[blue]Initializing RAG processor...[/blue]")
-    processor = RagProcessor(JWT_TOKEN, output_dir=output_dir, debug=debug_mode)
+    console.print("[yellow]Note: Browser window will open for OIDC authentication with Azure AD[/yellow]")
+    processor = RagProcessor(zendesk_url=zendesk_url, output_dir=output_dir, debug=debug_mode)
     
     # Get URLs to crawl
     console.print("\n[yellow]Enter URLs to crawl (one per line, empty line to finish):[/yellow]")
-    console.print("[dim]Default URLs if none provided:[/dim]")
-    console.print("[dim]  - https://docs.example.com[/dim]")
-    console.print("[dim]  - https://docs.example.com/api/v2[/dim]")
+    console.print("[dim]You can enter specific article URLs or just press Enter to crawl the entire help center[/dim]")
     
     start_urls = []
     while True:
@@ -819,14 +883,10 @@ def main():
         else:
             console.print(f"[red]Invalid URL: {url}. URLs must start with http:// or https://[/red]")
     
-    # Use default URLs if none provided
+    # Use Zendesk URL if no specific URLs provided
     if not start_urls:
-        start_urls = [
-            # You should provide your documentation URLs
-        ]
-        console.print("[red]No URLs provided. Please enter at least one URL to process.[/red]")
-        return
-        console.print("\n[dim]Using default URLs.[/dim]")
+        start_urls = [zendesk_url]
+        console.print(f"\n[dim]Using Zendesk Help Center URL: {zendesk_url}[/dim]")
     
     console.print("[green]Starting RAG document processing...[/green]")
     console.print(f"[yellow]Output directory:[/yellow] {output_dir}")

@@ -433,3 +433,162 @@ Feel free to extend these tools for your specific needs:
 ## 📄 License
 
 This project is provided as-is for documentation analysis and processing purposes.
+
+# Portal Analysis Tools
+
+This repository contains tools for analyzing and processing documentation portals, with support for OIDC authentication (Azure AD/Entra ID) for Zendesk Help Center.
+
+## Features
+
+### Document Analyzer (`doc_analyzer.py`)
+- **OIDC Authentication**: Supports Azure AD/Entra ID authentication for Zendesk Help Center
+- **Interactive Browser Authentication**: Opens browser window for user to complete OIDC login flow
+- **Content Analysis**: Analyzes documentation content using Llava AI vision model
+- **Image Analysis**: Processes and analyzes images in documentation
+- **Mermaid Diagram Detection**: Identifies and analyzes Mermaid diagrams
+- **Duplicate Detection**: Finds duplicate content and similar diagrams
+- **Comprehensive Reporting**: Generates detailed analysis reports
+- **Sitemap Generation**: Creates documentation sitemap with article titles and last updated dates
+
+### RAG Processor (`rag_processor.py`)
+- **OIDC Authentication**: Same authentication support as document analyzer
+- **Content Chunking**: Splits documentation into RAG-ready chunks
+- **Markdown Output**: Generates clean markdown files for knowledge bases
+- **Metadata Preservation**: Maintains links, structure, and metadata
+- **Index Generation**: Creates comprehensive index of all processed content
+
+## Authentication Support
+
+### OIDC Authentication (Azure AD/Entra ID)
+The tools now support OIDC authentication for Zendesk Help Center:
+
+1. **Interactive Login**: Browser window opens for user to complete Azure AD login
+2. **Session Management**: Maintains authenticated session for crawling
+3. **Automatic Detection**: Detects login requirements and guides user through process
+4. **Session Persistence**: Uses session cookies for subsequent requests
+
+### How It Works
+1. Script launches browser in non-headless mode
+2. Navigates to Zendesk Help Center URL
+3. Detects login buttons/links automatically
+4. Opens OIDC authentication flow
+5. Waits for user to complete Azure AD login
+6. Verifies authentication success
+7. Maintains session for content crawling
+
+## Installation
+
+```bash
+pip install -r requirements.txt
+```
+
+## Usage
+
+### Document Analyzer
+
+```bash
+python doc_analyzer.py
+```
+
+The script will:
+1. Prompt for your Zendesk Help Center URL
+2. Open browser for OIDC authentication
+3. Allow you to specify URLs to analyze (or use the main help center)
+4. Crawl and analyze content with Llava AI vision model
+5. Generate analysis reports and documentation sitemap
+
+### RAG Processor
+
+```bash
+python rag_processor.py
+```
+
+The script will:
+1. Prompt for your Zendesk Help Center URL
+2. Open browser for OIDC authentication
+3. Allow you to specify URLs to process (or use the main help center)
+4. Crawl content and split into RAG-ready chunks
+5. Generate markdown files and index
+
+## Configuration
+
+### Zendesk Help Center URL
+Provide your Zendesk Help Center URL in the format:
+```
+https://yourcompany.zendesk.com/hc
+```
+
+### Authentication Flow
+1. Enter your Zendesk Help Center URL when prompted
+2. Browser window will open automatically
+3. Complete the Azure AD/Entra ID login process
+4. Script will detect successful authentication
+5. Content crawling will begin automatically
+
+## Output Files
+
+### Document Analyzer Output
+- `doc_analysis.json`: Detailed analysis data
+- `doc_summary.md`: Human-readable analysis report
+- `sitemap.md`: Documentation sitemap with article titles and last updated dates
+
+### RAG Processor Output
+- `rag_output/`: Directory containing processed chunks
+- `rag_output/index.md`: Index of all processed content
+- Individual markdown files for each content chunk
+
+## Requirements
+
+- Python 3.8+
+- Playwright (for browser automation)
+- Ollama (for AI analysis)
+- Rich (for console output)
+- BeautifulSoup (for HTML parsing)
+- PIL (for image processing)
+
+## Troubleshooting
+
+### Authentication Issues
+- Ensure your Zendesk Help Center is configured with Azure AD/Entra ID
+- Check that you have proper access to the help center
+- Verify the URL format is correct
+- Complete the full OIDC flow in the browser window
+
+### Browser Issues
+- Script requires browser automation (Playwright)
+- Browser window must remain open during authentication
+- Ensure no popup blockers are active
+
+### Content Access
+- Verify you have access to the content you're trying to analyze
+- Check that the URLs are accessible from your authenticated session
+- Some content may require additional permissions
+
+## Migration from JWT Authentication
+
+The tools have been updated from JWT-based authentication to OIDC authentication:
+
+### Changes Made
+- Removed JWT token parameter
+- Added Zendesk URL parameter
+- Implemented interactive browser authentication
+- Updated authentication flow for OIDC
+- Enhanced session management
+
+### Benefits
+- Better security with Azure AD integration
+- No need to manage JWT tokens
+- Standard enterprise authentication flow
+- Improved session persistence
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test with your Zendesk Help Center
+5. Submit a pull request
+
+## License
+
+This project is licensed under the MIT License.

@@ -21,11 +21,10 @@ from datetime import datetime
 console = Console()
 
 class DocAnalyzer:
-    def __init__(self, jwt_token, ollama_model="llama3.2-vision:11b", debug=False):
-        self.jwt_token = jwt_token
+    def __init__(self, zendesk_url=None, ollama_model="llava", debug=False, output_dir="crawled_content"):
+        self.zendesk_url = zendesk_url
         self.base_url = ""  # Will be set from first URL
         self.headers = {
-            "Authorization": f"Bearer {jwt_token}",
             "User-Agent": "Doc-Analyzer/1.0"
         }
         self.visited_urls = set()
@@ -36,6 +35,11 @@ class DocAnalyzer:
             "num_ctx": 8192  # Context size for Ollama
         }
         self.debug = debug
+        self.output_dir = output_dir
+        
+        # Create output directory
+        import os
+        os.makedirs(self.output_dir, exist_ok=True)
         
         # URL patterns to exclude (add more as needed)
         self.exclude_patterns = [
@@ -57,11 +61,12 @@ class DocAnalyzer:
             console.print("[dim]Starting Playwright browser...[/dim]")
             
             self.playwright = sync_playwright().start()
-            self.browser = self.playwright.chromium.launch(headless=True)
+            # Launch browser in non-headless mode for OIDC authentication
+            self.browser = self.playwright.chromium.launch(headless=False)
             self.page = self.browser.new_page()
             
             # Set timeouts
-            self.page.set_default_timeout(15000)  # 15 seconds
+            self.page.set_default_timeout(30000)  # 30 seconds for OIDC flow
             
             # Authenticate immediately after browser setup
             self._authenticate()
@@ -74,32 +79,97 @@ class DocAnalyzer:
             self._cleanup_playwright()
     
     def _authenticate(self):
-        """Authenticate once using JWT to establish session cookies"""
+        """Authenticate using OIDC (Azure AD/Entra ID) for Zendesk Help Center"""
         try:
-            console.print("[dim]Authenticating with JWT...[/dim]")
+            console.print("[dim]Starting OIDC authentication for Zendesk Help Center...[/dim]")
             
-            # Initial authentication request with JWT and reload parameter
-            # Use the base URL if set, otherwise use a placeholder
-            base = self.base_url if self.base_url else "https://docs.example.com"
-            auth_url = f"{base}?jwt={self.jwt_token}&reload"
-            self.page.goto(auth_url)
+            if not self.zendesk_url:
+                console.print("[yellow]No Zendesk URL provided. Please provide the Zendesk Help Center URL.[/yellow]")
+                self.zendesk_url = input("Enter your Zendesk Help Center URL (e.g., https://yourcompany.zendesk.com/hc): ").strip()
             
-            # Wait for authentication to complete and page to load
+            # Navigate to Zendesk Help Center
+            console.print(f"[dim]Navigating to: {self.zendesk_url}[/dim]")
+            self.page.goto(self.zendesk_url)
+            
+            # Wait for page to load
             self.page.wait_for_load_state("networkidle")
             
-            # Additional wait to ensure session cookies are set
-            time.sleep(2)
-            
-            # Verify authentication worked by checking if we're not on a login page
+            # Check if we need to authenticate
             page_content = self.page.content()
-            if "login" in page_content.lower() or len(page_content) < 100000:
-                raise Exception("Authentication may have failed - got login page or minimal content")
             
-            self.authenticated = True
-            console.print("[green]✓ Authentication successful - session established[/green]")
+            # Look for signs that we need to login (login buttons, SSO links, etc.)
+            login_selectors = [
+                'a[href*="login"]',
+                'a[href*="signin"]', 
+                'button[data-testid*="login"]',
+                '.login-button',
+                '.signin-button',
+                '[data-testid="login"]',
+                'a:has-text("Sign In")',
+                'a:has-text("Login")',
+                'button:has-text("Sign In")',
+                'button:has-text("Login")'
+            ]
+            
+            login_found = False
+            for selector in login_selectors:
+                try:
+                    if self.page.locator(selector).count() > 0:
+                        console.print(f"[dim]Found login element: {selector}[/dim]")
+                        login_found = True
+                        break
+                except:
+                    continue
+            
+            if login_found:
+                console.print("[yellow]Login required. Please complete the OIDC authentication in the browser window.[/yellow]")
+                console.print("[yellow]The browser window will open for you to sign in with your Azure AD credentials.[/yellow]")
+                
+                # Click the login button/link
+                for selector in login_selectors:
+                    try:
+                        if self.page.locator(selector).count() > 0:
+                            self.page.locator(selector).first.click()
+                            break
+                    except:
+                        continue
+                
+                # Wait for user to complete authentication
+                console.print("[yellow]Waiting for authentication to complete...[/yellow]")
+                console.print("[yellow]Please complete the login process in the browser window.[/yellow]")
+                
+                # Wait for redirect back to Zendesk or for the page to change
+                self.page.wait_for_load_state("networkidle", timeout=120000)  # 2 minutes timeout
+                
+                # Additional wait to ensure session is established
+                time.sleep(3)
+                
+                # Verify authentication worked
+                final_content = self.page.content()
+                if "login" in final_content.lower() or len(final_content) < 50000:
+                    console.print("[yellow]Authentication may not have completed successfully. Please check the browser window.[/yellow]")
+                    console.print("[yellow]You may need to manually complete the login process.[/yellow]")
+                    
+                    # Give user more time to complete authentication
+                    input("Press Enter after completing authentication in the browser...")
+                    
+                    # Refresh the page to get the authenticated state
+                    self.page.reload()
+                    self.page.wait_for_load_state("networkidle")
+                    final_content = self.page.content()
+                
+                if len(final_content) > 50000 and "login" not in final_content.lower():
+                    self.authenticated = True
+                    console.print("[green]✓ OIDC authentication successful - session established[/green]")
+                else:
+                    raise Exception("Authentication verification failed - still seeing login page or minimal content")
+            else:
+                # No login required, already authenticated
+                console.print("[green]✓ Already authenticated or no authentication required[/green]")
+                self.authenticated = True
             
         except Exception as e:
-            console.print(f"[red]Authentication failed:[/red] {e}")
+            console.print(f"[red]OIDC authentication failed:[/red] {e}")
             self.authenticated = False
     
     def _cleanup_playwright(self):
@@ -301,16 +371,25 @@ class DocAnalyzer:
             # Extract Mermaid diagrams
             mermaid_diagrams = self.extract_mermaid_diagrams(soup, normalized_url)
             
+            # Extract metadata including last updated date
+            metadata = self.extract_page_metadata(soup, normalized_url)
+            
             # Store page data
-            self.content_data.append({
+            page_data = {
                 'url': normalized_url,
                 'space': self.determine_space(normalized_url),
                 'content': text_content,
                 'links': links,
                 'images': images,
                 'mermaid_diagrams': mermaid_diagrams,
-                'title': soup.find('title').text if soup.find('title') else ''
-            })
+                'title': soup.find('title').text if soup.find('title') else '',
+                'metadata': metadata
+            }
+            
+            self.content_data.append(page_data)
+            
+            # Save content to file system
+            self.save_page_content(page_data)
             
             return links
             
@@ -375,6 +454,291 @@ class DocAnalyzer:
             diagram['hash'] = hashlib.md5(content.encode()).hexdigest()[:8]
         
         return mermaid_diagrams
+    
+    def extract_page_metadata(self, soup, page_url):
+        """Extract metadata from the page including last updated date"""
+        metadata = {
+            'last_updated': None,
+            'author': None,
+            'breadcrumb': None,
+            'category': None
+        }
+        
+        # Try to find last updated date using common patterns
+        last_updated_selectors = [
+            'meta[property="article:modified_time"]',
+            'meta[name="last-modified"]',
+            'meta[property="og:updated_time"]',
+            '[data-last-updated]',
+            '[class*="last-updated"]',
+            '[class*="updated"]',
+            '[class*="modified"]',
+            'time[datetime]',
+            '.last-updated',
+            '.updated-date',
+            '.modified-date',
+            '.article-date',
+            '.publish-date'
+        ]
+        
+        for selector in last_updated_selectors:
+            try:
+                element = soup.select_one(selector)
+                if element:
+                    if selector.startswith('meta'):
+                        # Meta tag - get content attribute
+                        date_str = element.get('content', '')
+                    elif selector == 'time[datetime]':
+                        # Time element - get datetime attribute
+                        date_str = element.get('datetime', '')
+                    else:
+                        # Other elements - get text content
+                        date_str = element.get_text(strip=True)
+                    
+                    if date_str:
+                        # Try to parse the date
+                        parsed_date = self.parse_date_string(date_str)
+                        if parsed_date:
+                            metadata['last_updated'] = parsed_date
+                            break
+            except Exception as e:
+                if self.debug:
+                    console.print(f"[dim]Error parsing date with selector {selector}: {e}[/dim]")
+                continue
+        
+        # Try to extract breadcrumb and category hierarchy
+        breadcrumb_selectors = [
+            '.breadcrumb',
+            '.breadcrumbs',
+            '[class*="breadcrumb"]',
+            'nav[aria-label*="breadcrumb"]',
+            '.breadcrumb-nav',
+            '.breadcrumb-list',
+            'nav[class*="breadcrumb"]'
+        ]
+        
+        for selector in breadcrumb_selectors:
+            try:
+                breadcrumb = soup.select_one(selector)
+                if breadcrumb:
+                    # Extract breadcrumb text
+                    breadcrumb_text = breadcrumb.get_text(strip=True)
+                    if breadcrumb_text:
+                        metadata['breadcrumb'] = breadcrumb_text
+                        
+                        # Parse breadcrumb into hierarchy
+                        breadcrumb_parts = [part.strip() for part in breadcrumb_text.split('>') if part.strip()]
+                        metadata['breadcrumb_hierarchy'] = breadcrumb_parts
+                        
+                        # Extract main category (first part)
+                        if breadcrumb_parts:
+                            metadata['category'] = breadcrumb_parts[0]
+                        
+                        # Extract subcategory (second part if exists)
+                        if len(breadcrumb_parts) > 1:
+                            metadata['subcategory'] = breadcrumb_parts[1]
+                        
+                        # Extract section (third part if exists)
+                        if len(breadcrumb_parts) > 2:
+                            metadata['section'] = breadcrumb_parts[2]
+                        
+                        break
+            except:
+                continue
+        
+        # Try to extract category from URL path if breadcrumb not found
+        if not metadata.get('category'):
+            url_parts = page_url.split('/')
+            # Look for category-like parts in URL
+            for i, part in enumerate(url_parts):
+                if part in ['hc', 'en-us', 'articles', 'sections', 'categories']:
+                    if i + 1 < len(url_parts):
+                        metadata['category'] = url_parts[i + 1]
+                        break
+        
+        return metadata
+    
+    def parse_date_string(self, date_str):
+        """Parse various date string formats"""
+        from datetime import datetime
+        import re
+        
+        # Common date patterns
+        date_patterns = [
+            # ISO format: 2024-01-15T10:30:00Z
+            r'(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})',
+            # Date only: 2024-01-15
+            r'(\d{4}-\d{2}-\d{2})',
+            # US format: 01/15/2024
+            r'(\d{1,2}/\d{1,2}/\d{4})',
+            # Text format: January 15, 2024
+            r'(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}',
+            # Short month: Jan 15, 2024
+            r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},?\s+\d{4}'
+        ]
+        
+        for pattern in date_patterns:
+            match = re.search(pattern, date_str)
+            if match:
+                try:
+                    date_part = match.group(1)
+                    # Try different parsing approaches
+                    for fmt in ['%Y-%m-%dT%H:%M:%S', '%Y-%m-%d', '%m/%d/%Y', '%B %d, %Y', '%b %d, %Y']:
+                        try:
+                            parsed = datetime.strptime(date_part, fmt)
+                            return parsed.strftime('%Y-%m-%d')
+                        except ValueError:
+                            continue
+                except:
+                    continue
+        
+        return None
+    
+    def save_page_content(self, page_data):
+        """Save page content to file system in a structured directory"""
+        import os
+        import re
+        from pathlib import Path
+        
+        # Create a safe filename from the title
+        title = page_data['title'] or page_data['url'].split('/')[-1]
+        safe_title = re.sub(r'[^\w\s-]', '', title).strip()
+        safe_title = re.sub(r'[-\s]+', '-', safe_title)
+        if not safe_title:
+            safe_title = "untitled"
+        
+        # Determine directory structure based on metadata
+        category = page_data['metadata'].get('category', 'Uncategorized')
+        subcategory = page_data['metadata'].get('subcategory', 'General')
+        space = page_data['space']
+        
+        # Create directory path
+        if subcategory != 'General':
+            dir_path = Path(self.output_dir) / space / category / subcategory
+        else:
+            dir_path = Path(self.output_dir) / space / category
+        
+        # Create directories
+        dir_path.mkdir(parents=True, exist_ok=True)
+        
+        # Create filename with date if available
+        filename = safe_title
+        if page_data['metadata'].get('last_updated'):
+            filename = f"{page_data['metadata']['last_updated']}_{safe_title}"
+        
+        # Save content as markdown
+        content_file = dir_path / f"{filename}.md"
+        
+        # Download and save attachments
+        attachments_dir = None
+        if page_data['images'] or page_data['mermaid_diagrams']:
+            attachments_dir = dir_path / f"{safe_title}_attachments"
+            attachments_dir.mkdir(exist_ok=True)
+            self.download_attachments(page_data, attachments_dir)
+        
+        with open(content_file, 'w', encoding='utf-8') as f:
+            f.write(f"# {title}\n\n")
+            f.write(f"**URL:** {page_data['url']}\n")
+            f.write(f"**Space:** {space}\n")
+            f.write(f"**Category:** {category}\n")
+            if subcategory != 'General':
+                f.write(f"**Subcategory:** {subcategory}\n")
+            f.write(f"**Last Updated:** {page_data['metadata'].get('last_updated', 'Unknown')}\n")
+            f.write(f"**Breadcrumb:** {page_data['metadata'].get('breadcrumb', 'N/A')}\n\n")
+            
+            f.write("## Content\n\n")
+            f.write(page_data['content'])
+            
+            # Add links section
+            if page_data['links']:
+                f.write("\n\n## Links\n\n")
+                for link in page_data['links']:
+                    f.write(f"- {link}\n")
+            
+            # Add images section with local references
+            if page_data['images']:
+                f.write("\n\n## Images\n\n")
+                for i, img in enumerate(page_data['images']):
+                    if attachments_dir:
+                        # Reference local file
+                        local_filename = f"image_{i+1}_{self.get_safe_filename(img['url'])}"
+                        f.write(f"- ![{img['alt']}]({safe_title}_attachments/{local_filename})\n")
+                        f.write(f"  - Original URL: {img['url']}\n")
+                    else:
+                        f.write(f"- {img['url']} (alt: {img['alt']})\n")
+            
+            # Add Mermaid diagrams section
+            if page_data['mermaid_diagrams']:
+                f.write("\n\n## Mermaid Diagrams\n\n")
+                for i, diagram in enumerate(page_data['mermaid_diagrams']):
+                    f.write(f"### {diagram['type']}\n")
+                    f.write(f"```mermaid\n{diagram['content']}\n```\n\n")
+                    
+                    # Save Mermaid diagram as separate file
+                    if attachments_dir:
+                        diagram_file = attachments_dir / f"diagram_{i+1}_{safe_title}.mmd"
+                        with open(diagram_file, 'w', encoding='utf-8') as df:
+                            df.write(diagram['content'])
+        
+        if self.debug:
+            console.print(f"[dim]Saved content to: {content_file}[/dim]")
+            if attachments_dir:
+                console.print(f"[dim]Saved attachments to: {attachments_dir}[/dim]")
+    
+    def download_attachments(self, page_data, attachments_dir):
+        """Download images and other attachments for a page"""
+        import requests
+        from urllib.parse import urljoin, urlparse
+        import re
+        
+        # Download images
+        for i, img in enumerate(page_data['images']):
+            try:
+                img_url = img['url']
+                if not img_url.startswith(('http://', 'https://')):
+                    # Convert relative URL to absolute
+                    img_url = urljoin(page_data['url'], img_url)
+                
+                # Create safe filename
+                safe_filename = self.get_safe_filename(img_url)
+                local_filename = f"image_{i+1}_{safe_filename}"
+                local_path = attachments_dir / local_filename
+                
+                # Download image
+                response = requests.get(img_url, headers=self.headers, timeout=10)
+                response.raise_for_status()
+                
+                # Save image
+                with open(local_path, 'wb') as f:
+                    f.write(response.content)
+                
+                if self.debug:
+                    console.print(f"[dim]Downloaded image: {img_url} -> {local_path}[/dim]")
+                    
+            except Exception as e:
+                if self.debug:
+                    console.print(f"[yellow]Failed to download image {img_url}: {e}[/yellow]")
+                continue
+    
+    def get_safe_filename(self, url):
+        """Create a safe filename from a URL"""
+        import re
+        from urllib.parse import urlparse
+        
+        # Extract filename from URL
+        parsed = urlparse(url)
+        filename = parsed.path.split('/')[-1]
+        
+        # If no filename in URL, create one from domain
+        if not filename or '.' not in filename:
+            domain = parsed.netloc.replace('.', '_')
+            filename = f"{domain}_file"
+        
+        # Clean filename
+        safe_filename = re.sub(r'[^\w\-_.]', '_', filename)
+        safe_filename = re.sub(r'_+', '_', safe_filename)
+        
+        return safe_filename
     
     def _check_crawl_coverage(self):
         """Check for potential crawl issues"""
@@ -1106,24 +1470,260 @@ class DocAnalyzer:
                 f.write("\nNo Mermaid diagrams found in the documentation.\n")
         
         console.print("[green]Report saved to doc_analysis.json and doc_summary.md[/green]")
+        
+        # Generate sitemap
+        self.generate_sitemap()
+    
+    def generate_sitemap(self):
+        """Generate a sitemap with article titles and last updated dates"""
+        console.print("\n[green]Generating sitemap...[/green]")
+        
+        # Group pages by space
+        pages_by_space = {}
+        for page in self.content_data:
+            space = page['space']
+            if space not in pages_by_space:
+                pages_by_space[space] = []
+            pages_by_space[space].append(page)
+        
+        # Sort pages within each space by last updated date (newest first)
+        for space in pages_by_space:
+            pages_by_space[space].sort(
+                key=lambda x: x['metadata']['last_updated'] or '1900-01-01',
+                reverse=True
+            )
+        
+        # Generate sitemap file
+        with open("sitemap.md", "w", encoding="utf-8") as f:
+            f.write("# Zendesk Help Center Sitemap\n\n")
+            f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"Total pages: {len(self.content_data)}\n\n")
+            
+            # Add summary statistics
+            f.write("## Summary Statistics\n\n")
+            category_stats = self.analyze_portal_structure()
+            
+            for category, stats in category_stats.items():
+                f.write(f"### {category}\n")
+                f.write(f"- **Total pages:** {stats['total_pages']}\n")
+                f.write(f"- **Pages with dates:** {stats['pages_with_dates']}\n")
+                f.write(f"- **Average last updated:** {stats['avg_last_updated']}\n")
+                f.write(f"- **Subcategories:** {len(stats['subcategories'])}\n")
+                f.write("\n")
+            
+            # Generate detailed sitemap organized by portal structure
+            f.write("## Portal Structure with Articles\n\n")
+            
+            # Group all pages by category hierarchy
+            all_pages_by_category = {}
+            for page in self.content_data:
+                category = page['metadata'].get('category', 'Uncategorized')
+                if category not in all_pages_by_category:
+                    all_pages_by_category[category] = []
+                all_pages_by_category[category].append(page)
+            
+            # Generate organized structure with actual articles
+            for category, category_pages in sorted(all_pages_by_category.items()):
+                f.write(f"### {category}\n\n")
+                
+                # Group by subcategory
+                pages_by_subcategory = self.group_pages_by_subcategory(category_pages)
+                
+                for subcategory, subcategory_pages in pages_by_subcategory.items():
+                    if subcategory != "General":
+                        f.write(f"#### {subcategory}\n\n")
+                    
+                    # Sort pages by last updated date (newest first)
+                    subcategory_pages.sort(
+                        key=lambda x: x['metadata']['last_updated'] or '1900-01-01',
+                        reverse=True
+                    )
+                    
+                    f.write("| Title | Last Updated | URL |\n")
+                    f.write("|-------|--------------|-----|\n")
+                    
+                    for page in subcategory_pages:
+                        title = page['title'] or page['url'].split('/')[-1]
+                        last_updated = page['metadata']['last_updated'] or "Unknown"
+                        url = page['url']
+                        f.write(f"| {title} | {last_updated} | {url} |\n")
+                    
+                    f.write("\n")
+                
+                # Add uncategorized pages within this category
+                uncategorized_in_category = [p for p in category_pages if not p['metadata'].get('subcategory') or p['metadata']['subcategory'] == 'General']
+                if uncategorized_in_category:
+                    f.write("#### General\n\n")
+                    f.write("| Title | Last Updated | URL |\n")
+                    f.write("|-------|--------------|-----|\n")
+                    
+                    for page in uncategorized_in_category:
+                        title = page['title'] or page['url'].split('/')[-1]
+                        last_updated = page['metadata']['last_updated'] or "Unknown"
+                        url = page['url']
+                        f.write(f"| {title} | {last_updated} | {url} |\n")
+                    
+                    f.write("\n")
+            
+            # Add completely uncategorized pages
+            completely_uncategorized = [p for p in self.content_data if not p['metadata'].get('category')]
+            if completely_uncategorized:
+                f.write("### Uncategorized Pages\n\n")
+                f.write("| Title | Last Updated | URL |\n")
+                f.write("|-------|--------------|-----|\n")
+                
+                for page in completely_uncategorized:
+                    title = page['title'] or page['url'].split('/')[-1]
+                    last_updated = page['metadata']['last_updated'] or "Unknown"
+                    url = page['url']
+                    f.write(f"| {title} | {last_updated} | {url} |\n")
+                
+                f.write("\n")
+            
+            # Add breadcrumb analysis
+            f.write("## Breadcrumb Analysis\n\n")
+            breadcrumb_stats = self.analyze_breadcrumbs()
+            
+            f.write("### Most Common Navigation Paths\n\n")
+            for breadcrumb, count in breadcrumb_stats['common_paths'][:10]:
+                f.write(f"- **{breadcrumb}** ({count} pages)\n")
+            
+            f.write("\n### Breadcrumb Depth Analysis\n\n")
+            for depth, count in breadcrumb_stats['depth_analysis'].items():
+                f.write(f"- **Depth {depth}:** {count} pages\n")
+        
+        console.print("[green]Sitemap saved to sitemap.md[/green]")
+        
+        # Generate summary statistics
+        total_pages = len(self.content_data)
+        pages_with_dates = sum(1 for p in self.content_data if p['metadata']['last_updated'])
+        pages_without_dates = total_pages - pages_with_dates
+        
+        console.print(f"[blue]Sitemap Summary:[/blue]")
+        console.print(f"  - Total pages: {total_pages}")
+        console.print(f"  - Pages with last updated dates: {pages_with_dates}")
+        console.print(f"  - Pages without last updated dates: {pages_without_dates}")
+        console.print(f"  - Coverage: {(pages_with_dates/total_pages*100):.1f}% of pages have last updated dates")
+        
+        # Show portal structure summary
+        category_stats = self.analyze_portal_structure()
+        console.print(f"[blue]Portal Structure:[/blue]")
+        for category, stats in category_stats.items():
+            console.print(f"  - {category}: {stats['total_pages']} pages, {len(stats['subcategories'])} subcategories")
+    
+    def analyze_portal_structure(self):
+        """Analyze the portal structure by category"""
+        category_stats = {}
+        
+        for page in self.content_data:
+            category = page['metadata'].get('category', 'Uncategorized')
+            subcategory = page['metadata'].get('subcategory', 'General')
+            
+            if category not in category_stats:
+                category_stats[category] = {
+                    'total_pages': 0,
+                    'pages_with_dates': 0,
+                    'subcategories': set(),
+                    'last_updated_dates': []
+                }
+            
+            category_stats[category]['total_pages'] += 1
+            category_stats[category]['subcategories'].add(subcategory)
+            
+            if page['metadata'].get('last_updated'):
+                category_stats[category]['pages_with_dates'] += 1
+                category_stats[category]['last_updated_dates'].append(page['metadata']['last_updated'])
+        
+        # Calculate average last updated date for each category
+        for category, stats in category_stats.items():
+            if stats['last_updated_dates']:
+                # Convert dates to datetime for calculation
+                from datetime import datetime
+                dates = [datetime.strptime(d, '%Y-%m-%d') for d in stats['last_updated_dates']]
+                avg_date = sum(dates, datetime(1900, 1, 1)) / len(dates)
+                stats['avg_last_updated'] = avg_date.strftime('%Y-%m-%d')
+            else:
+                stats['avg_last_updated'] = "Unknown"
+            
+            # Convert subcategories set to list for JSON serialization
+            stats['subcategories'] = list(stats['subcategories'])
+        
+        return category_stats
+    
+    def group_pages_by_category(self, pages):
+        """Group pages by their category"""
+        pages_by_category = {}
+        
+        for page in pages:
+            category = page['metadata'].get('category', 'Uncategorized')
+            if category not in pages_by_category:
+                pages_by_category[category] = []
+            pages_by_category[category].append(page)
+        
+        return pages_by_category
+    
+    def group_pages_by_subcategory(self, pages):
+        """Group pages by their subcategory"""
+        pages_by_subcategory = {}
+        
+        for page in pages:
+            subcategory = page['metadata'].get('subcategory', 'General')
+            if subcategory not in pages_by_subcategory:
+                pages_by_subcategory[subcategory] = []
+            pages_by_subcategory[subcategory].append(page)
+        
+        return pages_by_subcategory
+    
+    def analyze_breadcrumbs(self):
+        """Analyze breadcrumb patterns"""
+        breadcrumb_analysis = {
+            'common_paths': [],
+            'depth_analysis': {}
+        }
+        
+        breadcrumb_counts = {}
+        depth_counts = {}
+        
+        for page in self.content_data:
+            if page['metadata'].get('breadcrumb_hierarchy'):
+                breadcrumb = ' > '.join(page['metadata']['breadcrumb_hierarchy'])
+                breadcrumb_counts[breadcrumb] = breadcrumb_counts.get(breadcrumb, 0) + 1
+                
+                depth = len(page['metadata']['breadcrumb_hierarchy'])
+                depth_counts[depth] = depth_counts.get(depth, 0) + 1
+        
+        # Sort by count (most common first)
+        breadcrumb_analysis['common_paths'] = sorted(
+            breadcrumb_counts.items(), 
+            key=lambda x: x[1], 
+            reverse=True
+        )
+        
+        breadcrumb_analysis['depth_analysis'] = depth_counts
+        
+        return breadcrumb_analysis
 
 def main():
     """Main function that runs the entire analysis"""
-    # Get JWT token
-    JWT_TOKEN = input("Enter your JWT token: ")
+    # Get Zendesk URL
+    ZENDESK_URL = input("Enter your Zendesk Help Center URL (e.g., https://yourcompany.zendesk.com/hc): ").strip()
     
     # Ask about debug mode
     debug_mode = input("Enable debug mode? (y/n): ").lower() == 'y'
     
-    # Initialize analyzer with Llama 3.2 Vision
-    console.print("[blue]Initializing analyzer with Llama 3.2 Vision...[/blue]")
-    analyzer = DocAnalyzer(JWT_TOKEN, ollama_model="llama3.2-vision:11b", debug=debug_mode)
+    # Ask about output directory
+    output_dir = input("Output directory for crawled content (default: crawled_content): ").strip()
+    if not output_dir:
+        output_dir = "crawled_content"
+    
+    # Initialize analyzer with Llava
+    console.print("[blue]Initializing analyzer with Llava...[/blue]")
+    console.print("[yellow]Note: Browser window will open for OIDC authentication with Azure AD[/yellow]")
+    analyzer = DocAnalyzer(zendesk_url=ZENDESK_URL, ollama_model="llava", debug=debug_mode, output_dir=output_dir)
     
     # Get URLs to crawl
     console.print("\n[yellow]Enter URLs to crawl (one per line, empty line to finish):[/yellow]")
-    console.print("[dim]Default URLs if none provided:[/dim]")
-    console.print("[dim]  - https://docs.example.com[/dim]")
-    console.print("[dim]  - https://docs.example.com/api/v2[/dim]")
+    console.print("[dim]You can enter specific article URLs or just press Enter to crawl the entire help center[/dim]")
     
     start_urls = []
     while True:
@@ -1135,17 +1735,13 @@ def main():
         else:
             console.print(f"[red]Invalid URL: {url}. URLs must start with http:// or https://[/red]")
     
-    # Use default URLs if none provided
+    # Use Zendesk URL if no specific URLs provided
     if not start_urls:
-        start_urls = [
-            # You should provide your documentation URLs
-        ]
-        console.print("[red]No URLs provided. Please enter at least one URL to analyze.[/red]")
-        return
-        console.print("\n[dim]Using default URLs.[/dim]")
+        start_urls = [ZENDESK_URL]
+        console.print(f"\n[dim]Using Zendesk Help Center URL: {ZENDESK_URL}[/dim]")
     
     console.print("[green]Starting documentation analysis...[/green]")
-    console.print(f"[yellow]Using model:[/yellow] llama3.2-vision:11b with 8K context")
+    console.print(f"[yellow]Using model:[/yellow] llava with 8K context")
     console.print(f"[yellow]Debug mode:[/yellow] {'Enabled' if debug_mode else 'Disabled'}")
     console.print(f"[yellow]Targeting:[/yellow]")
     for url in start_urls:
@@ -1163,6 +1759,8 @@ def main():
     console.print("Check these files for results:")
     console.print("  - doc_analysis.json (detailed data)")
     console.print("  - doc_summary.md (human-readable report)")
+    console.print("  - sitemap.md (documentation sitemap with last updated dates)")
+    console.print(f"  - {output_dir}/ (crawled content organized by portal structure)")
 
 
 # This is the entry point when running the script
