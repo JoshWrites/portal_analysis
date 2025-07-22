@@ -1,6 +1,6 @@
 # Zendesk Help Center Crawler - Browser Extension
 
-A Chrome browser extension that crawls and extracts content from Zendesk Help Center pages using your existing authenticated session.
+A Chrome browser extension that automatically detects and crawls any Zendesk Help Center using your existing authenticated session. Works with any company's Zendesk Help Center - just navigate to the site and start crawling!
 
 ## Features
 
@@ -31,13 +31,19 @@ A Chrome browser extension that crawls and extracts content from Zendesk Help Ce
 ### Prerequisites
 
 - **Chrome browser** (or Chromium-based browser)
-- **Access to a Zendesk Help Center** (you should be logged in)
+- **Access to any Zendesk Help Center** (you should be logged in)
+- **The extension automatically detects Zendesk Help Centers** - no configuration needed
 
 ### Steps
 
-1. **Navigate to your Zendesk Help Center**
-   - Example: `https://support.yourcompany.com/hc/en-us`
+1. **Navigate to any Zendesk Help Center**
+   - Examples: 
+     - `https://support.yourcompany.com/hc/en-us`
+     - `https://help.yourcompany.com/`
+     - `https://docs.yourcompany.com/`
+     - `https://knowledge.yourcompany.com/`
    - Make sure you're logged in
+   - The extension will automatically detect if it's a Zendesk Help Center
 
 2. **Click the extension icon** in your browser toolbar
    - You should see the "Zendesk Crawler" popup

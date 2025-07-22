@@ -9,8 +9,7 @@
     "downloads"
   ],
   "host_permissions": [
-    "*://*.zendesk.com/*",
-    "*://*.zendesk.com/hc/*"
+    "*://*/*"
   ],
   "action": {
     "default_popup": "popup.html",
@@ -18,7 +17,7 @@
   },
   "content_scripts": [
     {
-      "matches": ["*://*.zendesk.com/hc/*"],
+      "matches": ["<all_urls>"],
       "js": ["content.js"],
       "run_at": "document_end"
     }

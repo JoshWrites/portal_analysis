@@ -6,6 +6,27 @@ class ZendeskCrawler {
     this.crawledData = [];
     this.baseUrl = window.location.origin;
     this.currentUrl = window.location.href;
+    this.isZendeskHelpCenter = this.detectZendeskHelpCenter();
+  }
+
+  detectZendeskHelpCenter() {
+    // Check if this is a Zendesk Help Center
+    const url = window.location.href;
+    const path = window.location.pathname;
+    
+    // Common Zendesk Help Center patterns
+    const zendeskPatterns = [
+      /\/hc\//,  // Standard Zendesk Help Center path
+      /help\./,  // Help subdomains
+      /support\./, // Support subdomains
+      /docs\./,  // Docs subdomains
+      /knowledge\./, // Knowledge base
+      /zendesk\.com\/hc\//, // Official Zendesk
+    ];
+    
+    return zendeskPatterns.some(pattern => 
+      pattern.test(url) || pattern.test(path)
+    );
   }
 
   // Check if URL is a Zendesk content link
@@ -225,12 +246,20 @@ const crawler = new ZendeskCrawler();
 
 // Listen for messages from popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === 'startCrawling') {
+  if (request.action === 'checkZendesk') {
+    sendResponse({isZendesk: crawler.isZendeskHelpCenter});
+  } else if (request.action === 'startCrawling') {
     crawler.startCrawling();
+    sendResponse({success: true});
   } else if (request.action === 'stopCrawling') {
     crawler.stopCrawling();
+    sendResponse({success: true});
   }
-  sendResponse({success: true});
 });
 
-console.log('Zendesk Crawler content script loaded'); 
+console.log('Zendesk Crawler content script loaded');
+if (crawler.isZendeskHelpCenter) {
+  console.log('✅ Detected Zendesk Help Center:', window.location.href);
+} else {
+  console.log('ℹ️ Not on a Zendesk Help Center:', window.location.href);
+} 

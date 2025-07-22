@@ -9,8 +9,34 @@ document.addEventListener('DOMContentLoaded', function() {
   const linksFound = document.getElementById('linksFound');
   const contentSize = document.getElementById('contentSize');
 
+  // Check if we're on a Zendesk Help Center
+  checkZendeskHelpCenter();
+  
   // Check current status on load
   updateStatus();
+
+  function checkZendeskHelpCenter() {
+    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+      chrome.tabs.sendMessage(tabs[0].id, {action: 'checkZendesk'}, function(response) {
+        if (chrome.runtime.lastError) {
+          // Content script not loaded or not a Zendesk site
+          status.textContent = 'Not on a Zendesk Help Center';
+          status.className = 'status error';
+          startBtn.disabled = true;
+          startBtn.textContent = 'Navigate to a Help Center first';
+        } else if (response && response.isZendesk) {
+          status.textContent = 'Ready to crawl Zendesk Help Center';
+          status.className = 'status idle';
+          startBtn.disabled = false;
+        } else {
+          status.textContent = 'Not on a Zendesk Help Center';
+          status.className = 'status error';
+          startBtn.disabled = true;
+          startBtn.textContent = 'Navigate to a Help Center first';
+        }
+      });
+    });
+  }
 
   startBtn.addEventListener('click', function() {
     chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
