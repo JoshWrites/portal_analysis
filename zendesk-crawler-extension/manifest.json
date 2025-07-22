@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "Zendesk Help Center Crawler",
+  "version": "1.0",
+  "description": "Crawl and extract content from Zendesk Help Center pages",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "downloads"
+  ],
+  "host_permissions": [
+    "*://*.zendesk.com/*",
+    "*://*.zendesk.com/hc/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Zendesk Crawler"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*.zendesk.com/hc/*"],
+      "js": ["content.js"],
+      "run_at": "document_end"
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+} 

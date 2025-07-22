@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      width: 300px;
+      padding: 15px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 15px;
+      color: #2c3e50;
+    }
+    .status {
+      padding: 10px;
+      border-radius: 4px;
+      margin: 10px 0;
+      font-size: 14px;
+    }
+    .status.idle {
+      background-color: #ecf0f1;
+      color: #7f8c8d;
+    }
+    .status.crawling {
+      background-color: #e8f5e8;
+      color: #27ae60;
+    }
+    .status.error {
+      background-color: #fdf2f2;
+      color: #e74c3c;
+    }
+    button {
+      width: 100%;
+      padding: 10px;
+      margin: 5px 0;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .start-btn {
+      background-color: #3498db;
+      color: white;
+    }
+    .start-btn:hover {
+      background-color: #2980b9;
+    }
+    .stop-btn {
+      background-color: #e74c3c;
+      color: white;
+    }
+    .stop-btn:hover {
+      background-color: #c0392b;
+    }
+    .export-btn {
+      background-color: #27ae60;
+      color: white;
+    }
+    .export-btn:hover {
+      background-color: #229954;
+    }
+    .progress {
+      margin: 10px 0;
+      font-size: 12px;
+      color: #7f8c8d;
+    }
+    .stats {
+      font-size: 12px;
+      color: #7f8c8d;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h3>Zendesk Crawler</h3>
+  </div>
+  
+  <div id="status" class="status idle">
+    Ready to crawl
+  </div>
+  
+  <button id="startBtn" class="start-btn">Start Crawling</button>
+  <button id="stopBtn" class="stop-btn" style="display: none;">Stop Crawling</button>
+  <button id="exportBtn" class="export-btn">Export Data</button>
+  
+  <div id="progress" class="progress" style="display: none;">
+    Crawling... <span id="progressText">0 pages</span>
+  </div>
+  
+  <div id="stats" class="stats">
+    <div>Pages crawled: <span id="pagesCrawled">0</span></div>
+    <div>Links found: <span id="linksFound">0</span></div>
+    <div>Content size: <span id="contentSize">0 KB</span></div>
+  </div>
+  
+  <script src="popup.js"></script>
+</body>
+</html> 
