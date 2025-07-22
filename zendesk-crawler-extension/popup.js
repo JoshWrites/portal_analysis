@@ -2,6 +2,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const startBtn = document.getElementById('startBtn');
   const stopBtn = document.getElementById('stopBtn');
   const exportBtn = document.getElementById('exportBtn');
+  const testBtn = document.getElementById('testBtn');
   const status = document.getElementById('status');
   const progress = document.getElementById('progress');
   const progressText = document.getElementById('progressText');
@@ -17,24 +18,30 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function checkZendeskHelpCenter() {
     chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-      chrome.tabs.sendMessage(tabs[0].id, {action: 'checkZendesk'}, function(response) {
-        if (chrome.runtime.lastError) {
-          // Content script not loaded or not a Zendesk site
-          status.textContent = 'Not on a Zendesk Help Center';
-          status.className = 'status error';
-          startBtn.disabled = true;
-          startBtn.textContent = 'Navigate to a Help Center first';
-        } else if (response && response.isZendesk) {
-          status.textContent = 'Ready to crawl Zendesk Help Center';
-          status.className = 'status idle';
-          startBtn.disabled = false;
-        } else {
-          status.textContent = 'Not on a Zendesk Help Center';
-          status.className = 'status error';
-          startBtn.disabled = true;
-          startBtn.textContent = 'Navigate to a Help Center first';
-        }
-      });
+      // Add a small delay to ensure content script is ready
+      setTimeout(function() {
+        chrome.tabs.sendMessage(tabs[0].id, {action: 'checkZendesk'}, function(response) {
+          if (chrome.runtime.lastError) {
+            console.log('Communication error:', chrome.runtime.lastError);
+            // Content script not loaded or not a Zendesk site
+            status.textContent = 'Not on a Zendesk Help Center';
+            status.className = 'status error';
+            startBtn.disabled = true;
+            startBtn.textContent = 'Navigate to a Help Center first';
+          } else if (response && response.isZendesk) {
+            console.log('Zendesk detected:', response);
+            status.textContent = 'Ready to crawl Zendesk Help Center';
+            status.className = 'status idle';
+            startBtn.disabled = false;
+          } else {
+            console.log('Not a Zendesk site:', response);
+            status.textContent = 'Not on a Zendesk Help Center';
+            status.className = 'status error';
+            startBtn.disabled = true;
+            startBtn.textContent = 'Navigate to a Help Center first';
+          }
+        });
+      }, 500); // 500ms delay
     });
   }
 
@@ -55,6 +62,7 @@ document.addEventListener('DOMContentLoaded', function() {
   exportBtn.addEventListener('click', function() {
     chrome.storage.local.get(['crawledData'], function(result) {
       if (result.crawledData && result.crawledData.length > 0) {
+        // Export as JSON
         const dataStr = JSON.stringify(result.crawledData, null, 2);
         const blob = new Blob([dataStr], {type: 'application/json'});
         const url = URL.createObjectURL(blob);
@@ -64,9 +72,65 @@ document.addEventListener('DOMContentLoaded', function() {
           filename: 'zendesk_crawled_data.json',
           saveAs: true
         });
+        
+        // Also export as markdown files
+        exportAsMarkdown(result.crawledData);
       } else {
         alert('No data to export. Start crawling first.');
       }
+    });
+  });
+
+  function exportAsMarkdown(data) {
+    // Create a zip file with markdown content
+    const zip = new JSZip();
+    
+    data.forEach((page, index) => {
+      const filename = `page_${index + 1}.md`;
+      zip.file(filename, page.content);
+    });
+    
+    zip.generateAsync({type: 'blob'}).then(function(content) {
+      const url = URL.createObjectURL(content);
+      chrome.downloads.download({
+        url: url,
+        filename: 'zendesk_content_markdown.zip',
+        saveAs: true
+      });
+    });
+  }
+
+  testBtn.addEventListener('click', function() {
+    console.log('Testing communication...');
+    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+      console.log('Current tab:', tabs[0].url);
+      console.log('Tab ID:', tabs[0].id);
+      
+      // Try direct script injection with a simple test
+      chrome.scripting.executeScript({
+        target: {tabId: tabs[0].id},
+        func: function() {
+          console.log('Direct script injection test');
+          return {
+            url: window.location.href,
+            isZendesk: window.location.href.includes('/hc/'),
+            readyState: document.readyState
+          };
+        }
+      }, function(results) {
+        console.log('Direct injection results:', results);
+        if (results && results[0] && results[0].result) {
+          const result = results[0].result;
+          console.log('Page info:', result);
+          if (result.isZendesk) {
+            alert('✅ Zendesk detected via direct injection!');
+          } else {
+            alert('❌ Not a Zendesk site via direct injection.');
+          }
+        } else {
+          alert('❌ Direct injection failed.');
+        }
+      });
     });
   });
 

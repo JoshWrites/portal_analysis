@@ -118,12 +118,69 @@ class ZendeskCrawler {
     return metadata;
   }
 
+  // Extract markdown content from the page
+  extractMarkdownContent() {
+    // Find the main content area
+    const contentSelectors = [
+      '.article-body',
+      '.article-content',
+      '.content',
+      '.main-content',
+      '[role="main"]',
+      'main',
+      '.article',
+      '.post-content'
+    ];
+    
+    let contentElement = null;
+    for (const selector of contentSelectors) {
+      contentElement = document.querySelector(selector);
+      if (contentElement) break;
+    }
+    
+    if (!contentElement) {
+      contentElement = document.body;
+    }
+    
+    // Convert HTML to markdown-like content
+    let markdown = `# ${document.title}\n\n`;
+    
+    // Add metadata
+    const metadata = this.extractMetadata();
+    if (metadata.lastUpdated) {
+      markdown += `**Last Updated:** ${metadata.lastUpdated}\n\n`;
+    }
+    if (metadata.breadcrumb) {
+      markdown += `**Breadcrumb:** ${metadata.breadcrumb}\n\n`;
+    }
+    
+    // Extract headings and content
+    const headings = contentElement.querySelectorAll('h1, h2, h3, h4, h5, h6');
+    const paragraphs = contentElement.querySelectorAll('p, div, li');
+    
+    // Add headings
+    headings.forEach(heading => {
+      const level = parseInt(heading.tagName.charAt(1));
+      const prefix = '#'.repeat(level);
+      markdown += `${prefix} ${heading.textContent.trim()}\n\n`;
+    });
+    
+    // Add paragraphs
+    paragraphs.forEach(p => {
+      if (p.textContent.trim() && !p.querySelector('h1, h2, h3, h4, h5, h6')) {
+        markdown += `${p.textContent.trim()}\n\n`;
+      }
+    });
+    
+    return markdown;
+  }
+
   // Extract content from current page
   extractPageContent() {
     const content = {
       url: window.location.href,
       title: document.title,
-      content: document.body.innerText || document.body.textContent || '',
+      content: this.extractMarkdownContent(),
       links: [],
       images: [],
       metadata: this.extractMetadata()
@@ -175,7 +232,8 @@ class ZendeskCrawler {
     chrome.storage.local.set({crawlingStatus: 'crawling'});
     
     try {
-      await this.crawlPage(window.location.href);
+      // Start from current page and crawl all linked pages
+      await this.crawlAllPages(window.location.href);
       console.log('Crawling completed!');
     } catch (error) {
       console.error('Crawling error:', error);
@@ -185,6 +243,203 @@ class ZendeskCrawler {
     this.isCrawling = false;
     chrome.storage.local.set({crawlingStatus: 'idle'});
   }
+
+  // Crawl all pages recursively
+  async crawlAllPages(startUrl) {
+    const urlsToCrawl = [startUrl];
+    const crawledUrls = new Set();
+    
+    while (urlsToCrawl.length > 0 && this.isCrawling) {
+      const currentUrl = urlsToCrawl.shift();
+      
+      if (crawledUrls.has(currentUrl)) continue;
+      crawledUrls.add(currentUrl);
+      
+      console.log('Crawling:', currentUrl);
+      
+      // Get page content using fetch (no navigation)
+      const pageData = await this.fetchPageContent(currentUrl);
+      if (pageData) {
+        this.crawledData.push(pageData);
+        
+        // Save to storage
+        chrome.storage.local.set({crawledData: this.crawledData});
+        
+        // Find new links to crawl
+        const newLinks = pageData.links
+          .map(link => link.url)
+          .filter(url => !crawledUrls.has(url) && this.isZendeskContentLink(url))
+          .slice(0, 20); // Limit to prevent infinite crawling
+        
+        urlsToCrawl.push(...newLinks);
+        
+        console.log(`Found ${newLinks.length} new links to crawl`);
+      }
+    }
+  }
+
+  // Fetch page content without navigating
+  async fetchPageContent(url) {
+    try {
+      const response = await fetch(url);
+      const html = await response.text();
+      
+      // Create a temporary DOM to parse the content
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, 'text/html');
+      
+      // Extract content using the same logic as extractPageContent
+      const content = {
+        url: url,
+        title: doc.title,
+        content: this.extractMarkdownFromDocument(doc),
+        links: [],
+        images: [],
+        metadata: this.extractMetadataFromDocument(doc, url)
+      };
+
+      // Extract links
+      const links = doc.querySelectorAll('a[href]');
+      for (const link of links) {
+        const href = link.getAttribute('href');
+        if (href && !href.startsWith('javascript:') && !href.startsWith('mailto:')) {
+          const absoluteUrl = new URL(href, url).href;
+          if (this.isZendeskContentLink(absoluteUrl)) {
+            content.links.push({
+              url: absoluteUrl,
+              text: link.textContent.trim()
+            });
+          }
+        }
+      }
+
+      // Extract images
+      const images = doc.querySelectorAll('img[src]');
+      for (const img of images) {
+        const src = img.getAttribute('src');
+        if (src) {
+          const absoluteUrl = new URL(src, url).href;
+          content.images.push({
+            url: absoluteUrl,
+            alt: img.getAttribute('alt') || '',
+            title: img.getAttribute('title') || ''
+          });
+        }
+      }
+
+      return content;
+    } catch (error) {
+      console.error('Error fetching page:', url, error);
+      return null;
+    }
+  }
+
+  // Extract markdown from a document (not current page)
+  extractMarkdownFromDocument(doc) {
+    // Find the main content area
+    const contentSelectors = [
+      '.article-body',
+      '.article-content',
+      '.content',
+      '.main-content',
+      '[role="main"]',
+      'main',
+      '.article',
+      '.post-content'
+    ];
+    
+    let contentElement = null;
+    for (const selector of contentSelectors) {
+      contentElement = doc.querySelector(selector);
+      if (contentElement) break;
+    }
+    
+    if (!contentElement) {
+      contentElement = doc.body;
+    }
+    
+    // Convert HTML to markdown-like content
+    let markdown = `# ${doc.title}\n\n`;
+    
+    // Add metadata
+    const metadata = this.extractMetadataFromDocument(doc, doc.URL || '');
+    if (metadata.lastUpdated) {
+      markdown += `**Last Updated:** ${metadata.lastUpdated}\n\n`;
+    }
+    if (metadata.breadcrumb) {
+      markdown += `**Breadcrumb:** ${metadata.breadcrumb}\n\n`;
+    }
+    
+    // Extract headings and content
+    const headings = contentElement.querySelectorAll('h1, h2, h3, h4, h5, h6');
+    const paragraphs = contentElement.querySelectorAll('p, div, li');
+    
+    // Add headings
+    headings.forEach(heading => {
+      const level = parseInt(heading.tagName.charAt(1));
+      const prefix = '#'.repeat(level);
+      markdown += `${prefix} ${heading.textContent.trim()}\n\n`;
+    });
+    
+    // Add paragraphs
+    paragraphs.forEach(p => {
+      if (p.textContent.trim() && !p.querySelector('h1, h2, h3, h4, h5, h6')) {
+        markdown += `${p.textContent.trim()}\n\n`;
+      }
+    });
+    
+    return markdown;
+  }
+
+  // Extract metadata from a document (not current page)
+  extractMetadataFromDocument(doc, url) {
+    const metadata = {
+      title: doc.title,
+      url: url,
+      lastUpdated: null,
+      breadcrumb: null,
+      hierarchy: this.extractHierarchy(url)
+    };
+
+    // Try to find last updated date
+    const dateSelectors = [
+      'meta[property="article:modified_time"]',
+      'meta[name="last-modified"]',
+      '[data-last-updated]',
+      '.last-updated',
+      '.updated-date'
+    ];
+
+    for (const selector of dateSelectors) {
+      const element = doc.querySelector(selector);
+      if (element) {
+        const dateStr = element.getAttribute('content') || element.textContent;
+        if (dateStr) {
+          metadata.lastUpdated = dateStr.trim();
+          break;
+        }
+      }
+    }
+
+    // Try to find breadcrumb
+    const breadcrumbSelectors = [
+      '.breadcrumb',
+      '.breadcrumbs',
+      '[class*="breadcrumb"]'
+    ];
+
+    for (const selector of breadcrumbSelectors) {
+      const breadcrumb = doc.querySelector(selector);
+      if (breadcrumb) {
+        metadata.breadcrumb = breadcrumb.textContent.trim();
+        break;
+      }
+    }
+
+    return metadata;
+  }
+
+
 
   // Crawl a single page
   async crawlPage(url) {
@@ -246,18 +501,29 @@ const crawler = new ZendeskCrawler();
 
 // Listen for messages from popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  console.log('Content script received message:', request);
+  
   if (request.action === 'checkZendesk') {
+    console.log('Checking Zendesk, isZendeskHelpCenter:', crawler.isZendeskHelpCenter);
     sendResponse({isZendesk: crawler.isZendeskHelpCenter});
   } else if (request.action === 'startCrawling') {
+    console.log('Starting crawling...');
     crawler.startCrawling();
     sendResponse({success: true});
   } else if (request.action === 'stopCrawling') {
+    console.log('Stopping crawling...');
     crawler.stopCrawling();
     sendResponse({success: true});
   }
+  
+  return true; // Keep message channel open for async response
 });
 
 console.log('Zendesk Crawler content script loaded');
+console.log('Window location:', window.location.href);
+console.log('Document ready state:', document.readyState);
+console.log('Frame type:', window !== window.top ? 'iframe' : 'main frame');
+
 if (crawler.isZendeskHelpCenter) {
   console.log('✅ Detected Zendesk Help Center:', window.location.href);
 } else {

@@ -75,3 +75,10 @@ temp/
 rag_output/
 doc_analysis.json
 doc_summary.md
+
+# Crawled content and exports
+crawled_content/
+zendesk_crawled_data.json
+zendesk_content_markdown.zip
+*.md
+!README.md
