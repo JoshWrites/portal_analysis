@@ -1,435 +1,295 @@
-# Documentation Portal Analysis Toolset
+# Zendesk Help Center Crawler & Processor
 
-A comprehensive suite of tools for analyzing and processing documentation websites, with special support for JavaScript-rendered portals that require authentication. This toolset helps documentation teams identify content duplication, prepare content for RAG systems, and maintain documentation quality.
+A complete solution for crawling Zendesk Help Centers and generating structured deliverables.
 
-## 🎯 Purpose Overview
+## 🎯 **What This Does**
 
-### **doc_analyzer.py** - Documentation Analysis Tool
-Crawls and analyzes documentation to identify:
-- Duplicate content across different documentation spaces
-- Single-sourcing opportunities to reduce maintenance
-- Image and diagram duplication
-- Hard-coded values that should be variables
+This project provides **two complementary approaches** for crawling Zendesk Help Centers:
 
-### **rag_processor.py** - RAG Content Processor
-Transforms documentation into optimized chunks for RAG systems:
-- Cleans HTML content while preserving semantic structure
-- Creates intelligently-sized chunks with metadata
-- Generates markdown files ready for knowledge bases
-- Maintains context and relationships between chunks
+1. **Browser Extension** - Authenticated crawling using your existing session
+2. **Python Script** - Automated crawling with Playwright (for non-authenticated portals)
 
-## ⚠️ Important Access Requirement
+Both approaches generate the same **three deliverables**:
 
-**You must have valid access credentials to your documentation portal.** These tools require authentication to access protected documentation. Without proper credentials (e.g., JWT token), the tools will only be able to scrape publicly accessible pages, which may result in incomplete or minimal analysis.
+1. **📋 Sitemap** - Site structure with article titles and last updated dates
+2. **📁 Scraped Content** - Markdown files organized by portal structure with attachments
+3. **🤖 Ollama Analysis** - Single sourcing opportunities and image reuse detection
 
-## 🌐 Portal Compatibility
+## 🚀 **Quick Start**
 
-These tools are designed for documentation portals with the following characteristics:
+### **Option A: Browser Extension (Recommended)**
 
-### **Ideal For:**
-- **JavaScript-rendered documentation sites** (React, Vue, Angular-based)
-- **Static site generators** with authentication (Docusaurus, GitBook, MkDocs)
-- **Enterprise documentation portals** with JWT/session-based security
-- **API documentation platforms** (Swagger UI, Redoc, custom solutions)
-- **Knowledge bases** with structured content and navigation
+**Best for:** Authenticated Zendesk portals with SSO/OIDC
 
-### **Key Requirements:**
-- **JWT token authentication** (passed via URL parameters or headers)
-- **HTML-based content** (not PDF-only or binary formats)
-- **Consistent URL structure** for content categorization
-- **Server-side or client-side rendering** (both supported via Playwright)
-
-### **Authentication Support:**
-The tools currently support JWT authentication where tokens are passed as URL parameters (e.g., `?jwt=token`). The authentication flow:
-1. Initial request with JWT token establishes session
-2. Browser cookies maintain authentication state
-3. Subsequent requests use session cookies
-
-### **Not Suitable For:**
-- Sites requiring CAPTCHA or 2FA interaction
-- Documentation behind complex SSO flows (without JWT)
-- Binary-only documentation (PDFs without HTML)
-- Rate-limited APIs without HTML documentation
-
-## 💻 Hardware Requirements
-
-### doc_analyzer.py - Documentation Analysis Tool
-
-#### Minimum Requirements:
-- **CPU**: 4 cores (for Ollama LLM inference)
-- **RAM**: 16GB (8GB for Ollama model + system overhead)
-- **GPU**: Discrete GPU with 8GB VRAM
-  - NVIDIA: GTX 1070 or newer
-  - AMD: RX 6600 or newer (requires ROCm installation)
-- **Storage**: 20GB free (for Ollama model storage)
-- **Network**: Stable broadband connection
-
-#### Recommended Requirements:
-- **CPU**: 8+ cores (faster LLM inference)
-- **RAM**: 32GB (smooth operation with large documentation)
-- **GPU**: Discrete GPU with 12GB+ VRAM
-  - NVIDIA: RTX 3060 12GB, RTX 4060 Ti 16GB, or better
-  - AMD: RX 6700 XT, RX 7600 XT or better (requires ROCm installation)
-- **Storage**: 50GB+ free (model + analysis outputs)
-- **Network**: High-speed connection (faster crawling)
-
-### rag_processor.py - RAG Content Processor
-
-#### Minimum Requirements:
-- **CPU**: 2 cores
-- **RAM**: 8GB
-- **GPU**: None required (CPU-only tool)
-- **Storage**: 10GB free
-- **Network**: Stable broadband connection
-
-#### Recommended Requirements:
-- **CPU**: 4+ cores (faster processing)
-- **RAM**: 16GB (handle larger documentation sets)
-- **GPU**: Not needed
-- **Storage**: 20GB+ free (for output chunks)
-- **Network**: High-speed connection
-
-### GPU Notes:
-- **NVIDIA GPUs**: Work out-of-the-box with Ollama after CUDA drivers installation
-- **AMD GPUs**: Require ROCm installation for Ollama GPU acceleration
-- **Intel Arc GPUs**: Currently not supported by Ollama
-- The doc_analyzer tool benefits significantly from GPU acceleration for the Vision LLM model
-
-## 📦 Installation
-
-1. **Clone the repository**:
+1. **Install the browser extension:**
    ```bash
-   git clone <repository-url>
-   cd portal_analysis
+   # Load the extension in Chrome
+   # Go to chrome://extensions/
+   # Enable "Developer mode"
+   # Click "Load unpacked" and select zendesk-crawler-extension/
    ```
 
-2. **Create and activate virtual environment**:
+2. **Navigate to your Zendesk Help Center** (e.g., `https://support.company.com/hc/en-us`)
+
+3. **Click the extension icon** and click "Start Crawling"
+
+4. **Export the data** and process it:
    ```bash
-   python3 -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   python zendesk_processor.py zendesk_crawled_data.json processed_content
    ```
 
-3. **Install dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
+### **Option B: Python Script**
 
-4. **Install Playwright browsers**:
-   ```bash
-   playwright install chromium
-   ```
+**Best for:** Public portals or when you need automated crawling
 
-5. **Set up Ollama** (only for doc_analyzer):
-   ```bash
-   # Install Ollama following instructions at https://ollama.ai
-   ollama pull llama3.2-vision:11b
-   ```
-
-## 🚀 Quick Start
-
-### For Documentation Analysis:
 ```bash
-./doc_analyzer.py
-# Enter JWT token when prompted
-# Provide URLs to analyze
+python doc_analyzer.py
+# Enter your Zendesk URL and follow the prompts
 ```
 
-### For RAG Processing:
+## 📁 **Project Structure**
+
+```
+portal_analysis/
+├── zendesk-crawler-extension/     # Browser extension
+│   ├── manifest.json
+│   ├── popup.html
+│   ├── popup.js
+│   ├── content.js
+│   ├── background.js
+│   └── README.md
+├── zendesk_processor.py           # Processes extension data
+├── doc_analyzer.py               # Python crawler
+├── rag_processor.py              # RAG-specific processor
+└── README.md                     # This file
+```
+
+## 🎯 **Deliverables Generated**
+
+### **1. Sitemap (`sitemap.md`)**
+- **Site structure** organized by categories and sections
+- **Article titles** and URLs
+- **Last updated dates** for each article
+- **Summary statistics** (total pages, date coverage, etc.)
+
+### **2. Scraped Content (`content/` directory)**
+```
+content/
+├── Category Name/
+│   ├── Section Name/
+│   │   ├── Article Title/
+│   │   │   ├── 2024-01-15_article-title.md
+│   │   │   └── attachments/
+│   │   │       ├── image_1_screenshot.png
+│   │   │       └── image_2_diagram.png
+│   │   └── Another Article/
+│   └── Another Section/
+└── Another Category/
+```
+
+### **3. Ollama Analysis (`analysis_report.md`)**
+- **Single-source opportunities** - Content that could be consolidated
+- **Image reuse detection** - Same images used across multiple articles
+- **AI-powered insights** using Llava model
+
+## 🔧 **Installation**
+
+### **Prerequisites**
 ```bash
-./rag_processor.py
-# Enter JWT token when prompted
-# Specify output directory (default: rag_output)
-# Provide URLs to process
+pip install -r requirements.txt
 ```
 
-<details>
-<summary><h2>📊 Documentation Analyzer (doc_analyzer.py)</h2></summary>
+### **Browser Extension Setup**
+1. **Navigate to** `chrome://extensions/`
+2. **Enable "Developer mode"**
+3. **Click "Load unpacked"**
+4. **Select the** `zendesk-crawler-extension/` folder
 
-### Overview
-The Documentation Analyzer uses AI to comprehensively analyze your documentation portal, identifying opportunities for content consolidation and improvement.
+## 📖 **Usage Examples**
 
-### Key Features
-- **JavaScript Support**: Uses Playwright to handle modern SPAs and dynamic content
-- **Smart Crawling**: BFS algorithm with intelligent URL normalization
-- **AI Analysis**: Leverages Llama 3.2 Vision for content and image analysis
-- **Sliding Window Analysis**: Efficiently compares content across pages
-- **Rich Reporting**: Generates both JSON data and markdown summaries
+### **Browser Extension Workflow**
 
-### How It Works
+1. **Install the extension** (see Installation above)
 
-1. **Authentication & Setup**
-   - Uses JWT token to authenticate with the portal
-   - Establishes browser session with Playwright
-   - Maintains cookies for subsequent requests
-
-2. **Crawling Phase**
+2. **Navigate to your Zendesk Help Center**
    ```
-   Starting BFS crawl from 2 seed URLs
-   Crawling... Queue: 45 | Visited: 123
-   Progress: 280 pages crawled, 58 in queue
+   https://support.yourcompany.com/hc/en-us
    ```
 
-3. **Analysis Phase**
-   - **Content Hashing**: Creates sliding window hashes for deep comparison
-   - **AI Evaluation**: Uses Ollama to analyze similar content pairs
-   - **Image Analysis**: Perceptual hashing + vision AI for images
-   - **Diagram Extraction**: Identifies and compares Mermaid diagrams
+3. **Click the extension icon** and click "Start Crawling"
 
-4. **Output Generation**
-   - `doc_analysis.json`: Complete analysis data
-   - `doc_summary.md`: Human-readable findings
+4. **Wait for crawling to complete** (watch the progress)
 
-### Usage Example
-```bash
-./doc_analyzer.py
+5. **Click "Export Data"** to download the JSON file
 
-Enter your JWT token: eyJhbGciOiJIUzI1NiIs...
-Enable debug mode? (y/n): n
-Enter URLs to crawl (one per line, empty line to finish):
-> https://docs.yourcompany.com
-> https://docs.yourcompany.com/api/v2
-> 
+6. **Process the data:**
+   ```bash
+   python zendesk_processor.py zendesk_crawled_data.json my_output
+   ```
 
-Starting documentation analysis...
-Step 1: Crawling pages...
-Pages crawled: 338
-Step 2: Analyzing content with Vision AI...
-Found 47 single-sourcing opportunities
-Analysis complete!
+### **Python Script Workflow**
+
+1. **Run the crawler:**
+   ```bash
+   python doc_analyzer.py
+   ```
+
+2. **Enter your Zendesk URL** when prompted
+
+3. **Wait for crawling and analysis to complete**
+
+4. **Check the generated files:**
+   - `sitemap.md`
+   - `crawled_content/` directory
+   - `doc_analysis.json`
+   - `doc_summary.md`
+
+## 🔍 **Key Features**
+
+### **Browser Extension Advantages**
+- ✅ **Uses your existing login session** (no authentication issues)
+- ✅ **Access to fully rendered content** (JavaScript executed)
+- ✅ **Real-time progress tracking**
+- ✅ **No browser automation complexity**
+- ✅ **Works with SSO/OIDC portals**
+
+### **Python Script Advantages**
+- ✅ **Fully automated** (no manual intervention)
+- ✅ **Advanced analysis** with Ollama AI
+- ✅ **Comprehensive reporting**
+- ✅ **Image analysis** and duplicate detection
+- ✅ **Mermaid diagram extraction**
+
+### **Processor Features**
+- ✅ **Hierarchical organization** by category/section/article
+- ✅ **Attachment downloading** and local storage
+- ✅ **Image hash analysis** for reuse detection
+- ✅ **AI-powered content analysis**
+- ✅ **Markdown export** with metadata
+
+## 🛠 **Configuration**
+
+### **Browser Extension**
+- **Permissions:** Only accesses Zendesk Help Center pages
+- **Storage:** All data stored locally in Chrome
+- **Export:** JSON format for further processing
+
+### **Python Script**
+- **Model:** Uses Llava for AI analysis
+- **Authentication:** Supports OIDC/SSO via Playwright
+- **Output:** Multiple formats (JSON, Markdown, HTML)
+
+### **Processor**
+- **Model:** Configurable Ollama model (default: Llava)
+- **Structure:** Mirrors Zendesk portal hierarchy
+- **Attachments:** Downloads and organizes images
+
+## 🔧 **Troubleshooting**
+
+### **Browser Extension Issues**
+
+**Extension not working:**
+1. Check if you're on a Zendesk Help Center page (`zendesk.com/hc/`)
+2. Verify you're logged in to the Help Center
+3. Check browser console for errors (F12)
+
+**No content found:**
+1. Ensure you're logged in
+2. Try starting from the main Help Center page
+3. Check if the portal uses custom layouts
+
+### **Python Script Issues**
+
+**Authentication problems:**
+1. Use the browser extension instead
+2. Check if your portal requires SSO
+3. Verify the URL format
+
+**Crawling issues:**
+1. Enable debug mode for detailed logs
+2. Check if the portal is accessible
+3. Verify network connectivity
+
+### **Processor Issues**
+
+**JSON file not found:**
+1. Export data from the browser extension first
+2. Check the file path is correct
+3. Verify the JSON file is valid
+
+**Ollama errors:**
+1. Ensure Ollama is running: `ollama serve`
+2. Check if the Llava model is installed: `ollama pull llava`
+3. Verify network connectivity
+
+## 📊 **Output Examples**
+
+### **Sitemap Structure**
+```markdown
+# Zendesk Help Center Sitemap
+
+## Getting Started
+### Installation
+| Title | Last Updated | URL |
+|-------|--------------|-----|
+| Installing the App | 2024-01-15 | https://support.company.com/hc/articles/123 |
+| First Time Setup | 2024-01-10 | https://support.company.com/hc/articles/124 |
+
+### Configuration
+| Title | Last Updated | URL |
+|-------|--------------|-----|
+| API Configuration | 2024-01-12 | https://support.company.com/hc/articles/125 |
 ```
 
-### Next Steps with Output
-
-1. **Review the Summary** (`doc_summary.md`):
-   - Prioritize high-similarity content pairs
-   - Identify quick wins for consolidation
-   - Plan content refactoring
-
-2. **Deep Dive with JSON** (`doc_analysis.json`):
-   ```python
-   import json
-   with open('doc_analysis.json') as f:
-       data = json.load(f)
-   
-   # Find pages with most duplication
-   for candidate in data['single_source_candidates']:
-       if candidate['similarity_score'] > 80:
-           print(f"High similarity: {candidate['page1']} <-> {candidate['page2']}")
-   ```
-
-3. **Image Consolidation**:
-   - Replace duplicate images with single source
-   - Update image references across documentation
-   - Consider creating a shared assets library
-
-4. **Variable Extraction**:
-   - Create configuration files for version numbers
-   - Implement variable substitution in build process
-   - Update hard-coded values identified in report
-</details>
-
-<details>
-<summary><h2>🤖 RAG Processor (rag_processor.py)</h2></summary>
-
-### Overview
-The RAG Processor transforms your documentation into optimized chunks for use with Retrieval-Augmented Generation systems like Msty's Knowledge Stack or custom RAG implementations.
-
-### Key Features
-- **Smart Chunking**: Respects semantic boundaries and section headers
-- **Context Preservation**: Maintains relationships between chunks
-- **Rich Metadata**: Includes breadcrumbs, content type, and related links
-- **Clean Output**: Removes navigation while preserving content structure
-- **YAML Frontmatter**: Machine-readable metadata for each chunk
-
-### How It Works
-
-1. **Content Crawling**
-   - Same robust crawling as the analyzer
-   - Stores raw HTML for processing
-   - Maintains URL relationships
-
-2. **Processing Pipeline**
-   ```
-   For each page:
-   ├── Clean HTML (remove nav, ads, etc.)
-   ├── Extract metadata (breadcrumbs, links)
-   ├── Identify sections (headers, content blocks)
-   ├── Create chunks (300-1500 tokens each)
-   └── Save as markdown with frontmatter
-   ```
-
-3. **Chunk Generation**
-   - **Size Targets**: 300-1500 tokens per chunk
-   - **Overlap**: 100 tokens between chunks for context
-   - **Boundaries**: Respects headers and code blocks
-   - **Metadata**: Full context for each chunk
-
-4. **Output Structure**
-   ```
-   rag_output/
-   ├── api-v2/
-   │   ├── authentication-overview-01.md
-   │   ├── authentication-overview-02.md
-   │   └── jwt-configuration-01.md
-   ├── guides/
-   │   ├── getting-started-01.md
-   │   └── advanced-usage-01.md
-   └── index.md
-   ```
-
-### Usage Example
-```bash
-./rag_processor.py
-
-Enter your JWT token: eyJhbGciOiJIUzI1NiIs...
-Enable debug mode? (y/n): n
-Output directory (default: rag_output): my_docs
-Enter URLs to crawl (one per line, empty line to finish):
-> https://docs.yourcompany.com
-> 
-
-Starting RAG document processing...
-Step 1: Crawling pages...
-Pages crawled: 156
-Step 2: Processing content into RAG chunks...
-Processed 523 chunks from 156 pages
-Step 3: Generating index...
-Processing complete!
+### **Content Directory**
+```
+processed_content/
+├── Getting Started/
+│   ├── Installation/
+│   │   ├── Installing the App/
+│   │   │   ├── 2024-01-15_installing-the-app.md
+│   │   │   └── attachments/
+│   │   │       ├── image_1_install_screenshot.png
+│   │   │       └── image_2_setup_diagram.png
 ```
 
-### Chunk Format Example
-```yaml
----
-title: "Authentication Overview"
-page_url: "https://docs.yourcompany.com/api/auth"
-space: "api"
-breadcrumb: "API Documentation > Authentication > Overview"
-content_type: "api"
-chunk_index: 1
-total_chunks: 3
-token_count: 842
-related_links:
-  - "https://docs.yourcompany.com/api/auth/jwt"
-  - "https://docs.yourcompany.com/api/auth/oauth"
----
+### **Analysis Report**
+```markdown
+# Zendesk Help Center Analysis Report
 
-# Authentication Overview
+## Single-Source Opportunities
 
-The API uses JWT tokens for authentication. All requests must include a valid token in the Authorization header...
+### Opportunity 1
+**Pages with similar content:**
+- Installing the App (https://support.company.com/hc/articles/123)
+- First Time Setup (https://support.company.com/hc/articles/124)
+
+**Analysis:** YES - Both pages contain similar installation steps that could be consolidated into a single guide.
+
+## Image Reuse Analysis
+
+### Image 1 (used 3 times)
+- **Installing the App** (https://support.company.com/image1.png)
+- **First Time Setup** (https://support.company.com/image1.png)
+- **Configuration Guide** (https://support.company.com/image1.png)
 ```
 
-### Next Steps with Output
+## 🤝 **Contributing**
 
-1. **Import to Knowledge Systems**:
-   - **Msty**: Import markdown files into Knowledge Stack
-   - **LangChain**: Load as documents with metadata
-   - **LlamaIndex**: Use as knowledge base
-   - **Custom RAG**: Process with your embedding pipeline
+1. **Fork the repository**
+2. **Create a feature branch**
+3. **Make your changes**
+4. **Test thoroughly**
+5. **Submit a pull request**
 
-2. **Custom Processing**:
-   ```python
-   import os
-   import yaml
-   
-   # Read all chunks and analyze
-   for root, dirs, files in os.walk('rag_output'):
-       for file in files:
-           if file.endswith('.md'):
-               with open(os.path.join(root, file)) as f:
-                   # Parse frontmatter
-                   content = f.read()
-                   frontmatter, text = content.split('---\n', 2)[1:]
-                   metadata = yaml.safe_load(frontmatter)
-                   
-                   # Process based on content type
-                   if metadata['content_type'] == 'api':
-                       # Special handling for API docs
-                       pass
-   ```
+## 📄 **License**
 
-3. **Quality Assurance**:
-   - Review the index.md for completeness
-   - Check chunk sizes are appropriate
-   - Verify metadata accuracy
-   - Test retrieval performance
+This project is provided as-is for educational and development purposes.
 
-4. **Integration Options**:
-   - **Vector Databases**: Index with metadata filters
-   - **Search Systems**: Use metadata for faceted search
-   - **ChatBots**: Provide contextual documentation answers
-   - **Support Systems**: Enhanced ticket resolution
-</details>
+## 🆘 **Support**
 
-## 🛠️ Common Configuration
-
-### Authentication Setup
-Both tools support JWT authentication where tokens are passed as URL parameters:
-```python
-# Current implementation
-auth_url = f"{base_url}?jwt={jwt_token}&reload"
-```
-
-To adapt for other authentication methods, modify the `_authenticate()` method in either tool.
-
-### URL Filtering
-Customize which pages to crawl by modifying:
-```python
-# In either tool
-def should_crawl_url(self, url):
-    # Add your custom logic
-    if "/internal/" in url:
-        return False
-    return True
-```
-
-### Space Detection
-Define how to categorize your documentation:
-```python
-def determine_space(self, url):
-    if "/api/" in url:
-        return "api-docs"
-    elif "/tutorials/" in url:
-        return "tutorials"
-    return "general"
-```
-
-## 📝 Requirements
-
-- **Python 3.8+**
-- **Playwright** for JavaScript rendering
-- **BeautifulSoup4** for HTML parsing
-- **Rich** for console output
-- **PyYAML** for metadata handling
-- **Ollama + Llama 3.2 Vision** (analyzer only)
-
-## 🔧 Extending the Tools
-
-### Adding Authentication Methods
-To support OAuth, SAML, or other authentication:
-1. Modify `_authenticate()` method
-2. Update session/cookie handling
-3. Adjust the initial authentication URL pattern
-
-### Custom Content Processing
-To handle specific documentation formats:
-1. Update `clean_content()` for your HTML structure
-2. Modify `extract_sections()` for custom layouts
-3. Adjust chunking logic in `create_chunks()`
-
-### Output Format Customization
-To generate different output formats:
-1. Modify `save_chunk()` for new file formats
-2. Update metadata structure in `extract_metadata()`
-3. Adjust the index generation logic
-
-## 🤝 Contributing
-
-Feel free to extend these tools for your specific needs:
-- Add new authentication methods
-- Customize content cleaning rules
-- Implement additional output formats
-- Create specialized analyzers
-
-## 📄 License
-
-This project is provided as-is for documentation analysis and processing purposes.
+For issues or questions:
+1. **Check the troubleshooting section** above
+2. **Review the browser console** for error messages
+3. **Verify you're on a Zendesk Help Center page**
+4. **Ensure you're logged in** to the Help Center
