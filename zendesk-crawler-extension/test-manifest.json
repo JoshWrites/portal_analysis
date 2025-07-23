@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Zendesk Help Center Crawler",
+  "name": "Zendesk Help Center Crawler (TEST)",
   "version": "1.0",
-  "description": "Crawl and extract content from Zendesk Help Center pages",
+  "description": "Test version of Zendesk Help Center Crawler",
   "permissions": [
     "activeTab",
     "storage",
@@ -13,13 +13,13 @@
     "*://*/*"
   ],
   "action": {
-    "default_popup": "popup.html",
-    "default_title": "Zendesk Crawler"
+    "default_popup": "debug-popup.html",
+    "default_title": "Zendesk Crawler (TEST)"
   },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["jszip.min.js", "content.js"],
+      "js": ["test-content.js"],
       "run_at": "document_start",
       "all_frames": true
     }

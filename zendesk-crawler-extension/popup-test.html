@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      width: 300px;
+      padding: 15px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    .stats {
+      margin: 10px 0;
+      padding: 10px;
+      background: #f0f0f0;
+    }
+    button {
+      width: 100%;
+      padding: 10px;
+      margin: 5px 0;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      background-color: #3498db;
+      color: white;
+    }
+  </style>
+</head>
+<body>
+  <h3>Popup Test</h3>
+  
+  <div class="stats">
+    <div>Pages crawled: <span id="pagesCrawled">0</span></div>
+    <div>Links found: <span id="linksFound">0</span></div>
+    <div>Content size: <span id="contentSize">0 KB</span></div>
+  </div>
+  
+  <button onclick="testCounters()">Test Counters</button>
+  <button onclick="testStorage()">Test Storage</button>
+  
+  <div id="debug"></div>
+  
+  <script>
+    function log(message) {
+      console.log(message);
+      document.getElementById('debug').innerHTML += '<div>' + message + '</div>';
+    }
+    
+    function testCounters() {
+      log('Testing counters...');
+      
+      const pagesCrawled = document.getElementById('pagesCrawled');
+      const linksFound = document.getElementById('linksFound');
+      const contentSize = document.getElementById('contentSize');
+      
+      if (pagesCrawled) {
+        pagesCrawled.textContent = '3';
+        log('Pages counter updated');
+      } else {
+        log('ERROR: pagesCrawled element not found');
+      }
+      
+      if (linksFound) {
+        linksFound.textContent = '5';
+        log('Links counter updated');
+      } else {
+        log('ERROR: linksFound element not found');
+      }
+      
+      if (contentSize) {
+        contentSize.textContent = '1 KB (150 bytes)';
+        log('Content size counter updated');
+      } else {
+        log('ERROR: contentSize element not found');
+      }
+    }
+    
+    function testStorage() {
+      log('Testing storage...');
+      
+      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        log('Chrome storage available');
+        
+        const testData = [
+          {
+            url: 'https://test.com/page1',
+            title: 'Test Page 1',
+            content: 'This is test content for page 1',
+            links: ['https://test.com/link1', 'https://test.com/link2'],
+            images: []
+          }
+        ];
+        
+        chrome.storage.local.set({crawledData: testData}, function() {
+          log('Data saved to storage');
+          
+          chrome.storage.local.get(['crawledData'], function(result) {
+            log('Data retrieved: ' + JSON.stringify(result));
+            
+            const data = result.crawledData || [];
+            document.getElementById('pagesCrawled').textContent = data.length;
+            document.getElementById('linksFound').textContent = data.reduce((sum, page) => sum + (page.links ? page.links.length : 0), 0);
+            document.getElementById('contentSize').textContent = data.reduce((sum, page) => sum + (page.content ? page.content.length : 0), 0) + ' bytes';
+          });
+        });
+      } else {
+        log('Chrome storage not available');
+      }
+    }
+    
+    // Initialize
+    log('Popup test loaded');
+    log('DOM elements found: ' + 
+        'pagesCrawled=' + !!document.getElementById('pagesCrawled') + ', ' +
+        'linksFound=' + !!document.getElementById('linksFound') + ', ' +
+        'contentSize=' + !!document.getElementById('contentSize')
+    );
+  </script>
+</body>
+</html> 

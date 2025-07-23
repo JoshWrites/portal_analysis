@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Simple Download Test</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    button { padding: 10px; margin: 5px; }
+    .log { background: #f0f0f0; padding: 10px; margin: 10px 0; font-family: monospace; }
+  </style>
+</head>
+<body>
+  <h2>Simple Download Test</h2>
+  
+  <button onclick="testDownload()">Test Download</button>
+  <button onclick="checkPermissions()">Check Permissions</button>
+  
+  <div class="log" id="log"></div>
+  
+  <script>
+    function log(message) {
+      const logDiv = document.getElementById('log');
+      logDiv.innerHTML += new Date().toLocaleTimeString() + ': ' + message + '<br>';
+      console.log(message);
+    }
+    
+    function testDownload() {
+      log('Testing download...');
+      
+      // Check if chrome.downloads is available
+      if (typeof chrome === 'undefined' || !chrome.downloads) {
+        log('ERROR: chrome.downloads not available');
+        return;
+      }
+      
+      log('chrome.downloads is available');
+      
+      // Create a simple text file
+      const content = 'This is a test download file.';
+      const blob = new Blob([content], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      
+      log('Created blob URL: ' + url);
+      
+      // Try to download
+      chrome.downloads.download({
+        url: url,
+        filename: 'test_download.txt',
+        saveAs: false
+      }, (downloadId) => {
+        if (chrome.runtime.lastError) {
+          log('Download error: ' + chrome.runtime.lastError.message);
+        } else {
+          log('Download started successfully! ID: ' + downloadId);
+        }
+      });
+    }
+    
+    function checkPermissions() {
+      log('Checking permissions...');
+      
+      if (typeof chrome === 'undefined') {
+        log('ERROR: chrome object not available');
+        return;
+      }
+      
+      log('chrome object available');
+      
+      if (chrome.permissions) {
+        chrome.permissions.contains({
+          permissions: ['downloads']
+        }, (result) => {
+          log('Downloads permission: ' + result);
+        });
+      } else {
+        log('chrome.permissions not available');
+      }
+    }
+    
+    log('Test initialized');
+  </script>
+</body>
+</html> 

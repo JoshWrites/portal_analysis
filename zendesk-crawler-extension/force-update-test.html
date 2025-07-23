@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Force Update Test</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    .stats { margin: 20px 0; padding: 10px; background: #f0f0f0; }
+    button { margin: 5px; padding: 10px; }
+  </style>
+</head>
+<body>
+  <h1>Force Update Test</h1>
+  
+  <div class="stats">
+    <div>Pages crawled: <span id="pagesCrawled">0</span></div>
+    <div>Links found: <span id="linksFound">0</span></div>
+    <div>Content size: <span id="contentSize">0 KB</span></div>
+  </div>
+  
+  <button onclick="forceUpdate()">Force Update</button>
+  <button onclick="readStorage()">Read Storage</button>
+  
+  <div id="debug"></div>
+  
+  <script>
+    function log(message) {
+      console.log(message);
+      document.getElementById('debug').innerHTML += '<div>' + message + '</div>';
+    }
+    
+    function forceUpdate() {
+      log('Forcing immediate update...');
+      
+      // Direct DOM manipulation
+      document.getElementById('pagesCrawled').textContent = '3';
+      document.getElementById('linksFound').textContent = '5';
+      document.getElementById('contentSize').textContent = '1 KB (150 bytes)';
+      
+      log('Counters updated directly');
+    }
+    
+    function readStorage() {
+      log('Reading storage...');
+      
+      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        chrome.storage.local.get(['crawledData'], function(result) {
+          log('Storage data: ' + JSON.stringify(result));
+          
+          const data = result.crawledData || [];
+          log('Data length: ' + data.length);
+          
+          // Update counters
+          document.getElementById('pagesCrawled').textContent = data.length;
+          
+          const totalLinks = data.reduce((sum, page) => sum + (page.links ? page.links.length : 0), 0);
+          document.getElementById('linksFound').textContent = totalLinks;
+          
+          const totalSize = data.reduce((sum, page) => sum + (page.content ? page.content.length : 0), 0);
+          document.getElementById('contentSize').textContent = `${Math.round(totalSize / 1024)} KB (${totalSize} bytes)`;
+          
+          log('Counters updated from storage');
+        });
+      } else {
+        log('Chrome storage not available');
+      }
+    }
+    
+    // Initialize
+    log('Page loaded');
+  </script>
+</body>
+</html> 

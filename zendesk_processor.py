@@ -235,39 +235,7 @@ class ZendeskProcessor:
                         f.write("## Content\n\n")
                         f.write(article['content'])
                     
-                    # Download and save attachments
-                    if article.get('images'):
-                        attachments_dir = article_dir / "attachments"
-                        attachments_dir.mkdir(exist_ok=True)
-                        
-                        for i, img in enumerate(article['images']):
-                            try:
-                                img_url = img['url']
-                                if not img_url.startswith('http'):
-                                    continue
-                                
-                                # Download image
-                                response = requests.get(img_url, timeout=10)
-                                response.raise_for_status()
-                                
-                                # Create safe filename
-                                img_filename = f"image_{i+1}_{self.sanitize_filename(img.get('alt', 'image'))}.png"
-                                img_path = attachments_dir / img_filename
-                                
-                                with open(img_path, 'wb') as img_file:
-                                    img_file.write(response.content)
-                                
-                                # Store image hash for analysis
-                                img_hash = self.calculate_image_hash(response.content)
-                                self.image_hashes[img_hash].append({
-                                    'url': img_url,
-                                    'path': str(img_path),
-                                    'article': title,
-                                    'alt': img.get('alt', '')
-                                })
-                                
-                            except Exception as e:
-                                console.print(f"[yellow]Failed to download image {img_url}: {e}[/yellow]")
+                    
     
     def sanitize_filename(self, filename):
         """Create a safe filename"""

@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Storage Test</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    .stats { margin: 20px 0; padding: 10px; background: #f0f0f0; }
+    button { margin: 5px; padding: 10px; }
+  </style>
+</head>
+<body>
+  <h1>Chrome Storage Test</h1>
+  
+  <div class="stats">
+    <div>Pages crawled: <span id="pagesCrawled">0</span></div>
+    <div>Links found: <span id="linksFound">0</span></div>
+    <div>Content size: <span id="contentSize">0 KB</span></div>
+  </div>
+  
+  <button onclick="testStorage()">Test Storage</button>
+  <button onclick="readStorage()">Read Storage</button>
+  <button onclick="clearStorage()">Clear Storage</button>
+  
+  <div id="debug"></div>
+  
+  <script>
+    function log(message) {
+      console.log(message);
+      document.getElementById('debug').innerHTML += '<div>' + message + '</div>';
+    }
+    
+    function testStorage() {
+      log('Testing Chrome storage...');
+      
+      const testData = [
+        {
+          url: 'https://test.com/page1',
+          title: 'Test Page 1',
+          content: 'This is test content for page 1',
+          links: ['https://test.com/link1', 'https://test.com/link2'],
+          images: []
+        },
+        {
+          url: 'https://test.com/page2',
+          title: 'Test Page 2',
+          content: 'This is test content for page 2 with more text to make it longer',
+          links: ['https://test.com/link3'],
+          images: []
+        }
+      ];
+      
+      if (typeof chrome !== 'undefined' && chrome.storage) {
+        log('Chrome storage available');
+        chrome.storage.local.set({crawledData: testData}, function() {
+          log('Data saved to Chrome storage');
+          readStorage();
+        });
+      } else {
+        log('Chrome storage not available - using localStorage');
+        localStorage.setItem('crawledData', JSON.stringify(testData));
+        readStorage();
+      }
+    }
+    
+    function readStorage() {
+      log('Reading storage...');
+      
+      if (typeof chrome !== 'undefined' && chrome.storage) {
+        chrome.storage.local.get(['crawledData'], function(result) {
+          log('Chrome storage data: ' + JSON.stringify(result));
+          updateCounters(result.crawledData || []);
+        });
+      } else {
+        const data = JSON.parse(localStorage.getItem('crawledData') || '[]');
+        log('localStorage data: ' + JSON.stringify(data));
+        updateCounters(data);
+      }
+    }
+    
+    function clearStorage() {
+      log('Clearing storage...');
+      
+      if (typeof chrome !== 'undefined' && chrome.storage) {
+        chrome.storage.local.set({crawledData: []}, function() {
+          log('Chrome storage cleared');
+          updateCounters([]);
+        });
+      } else {
+        localStorage.removeItem('crawledData');
+        log('localStorage cleared');
+        updateCounters([]);
+      }
+    }
+    
+    function updateCounters(data) {
+      log('Updating counters with ' + data.length + ' pages');
+      
+      document.getElementById('pagesCrawled').textContent = data.length;
+      
+      const totalLinks = data.reduce((sum, page) => sum + (page.links ? page.links.length : 0), 0);
+      document.getElementById('linksFound').textContent = totalLinks;
+      
+      const totalSize = data.reduce((sum, page) => sum + (page.content ? page.content.length : 0), 0);
+      document.getElementById('contentSize').textContent = `${Math.round(totalSize / 1024)} KB (${totalSize} bytes)`;
+      
+      log('Counters updated: pages=' + data.length + ', links=' + totalLinks + ', size=' + totalSize);
+    }
+    
+    // Initialize
+    log('Page loaded');
+    readStorage();
+  </script>
+</body>
+</html> 

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Download Debug Test</title>
+    <script src="jszip.min.js"></script>
+</head>
+<body>
+    <h1>Download Debug Test</h1>
+    <button id="testDownload">Test Download</button>
+    <div id="status"></div>
+    
+    <script>
+        document.getElementById('testDownload').addEventListener('click', async () => {
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = 'Testing download...';
+            
+            try {
+                // Create a simple ZIP file
+                const zip = new JSZip();
+                zip.file('test.txt', 'This is a test file');
+                zip.file('info.json', JSON.stringify({
+                    test: true,
+                    timestamp: new Date().toISOString()
+                }, null, 2));
+                
+                // Generate blob
+                const zipBlob = await zip.generateAsync({type: 'blob'});
+                console.log('ZIP blob created, size:', zipBlob.size);
+                
+                // Convert to base64
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const base64Data = reader.result.split(',')[1];
+                    console.log('Base64 data length:', base64Data.length);
+                    
+                    // Send to background script
+                    chrome.runtime.sendMessage({
+                        action: 'downloadChunk',
+                        data: {
+                            filename: 'test_debug_chunk.zip',
+                            base64Data: base64Data,
+                            chunkNumber: 1,
+                            runId: 'test-run'
+                        }
+                    }, (response) => {
+                        if (chrome.runtime.lastError) {
+                            console.error('Download error:', chrome.runtime.lastError);
+                            statusDiv.innerHTML = `Error: ${chrome.runtime.lastError.message}`;
+                        } else if (response && response.success) {
+                            console.log('Download started:', response);
+                            statusDiv.innerHTML = `Download started! ID: ${response.downloadId}`;
+                        } else {
+                            console.error('Download failed:', response);
+                            statusDiv.innerHTML = `Download failed: ${response?.error || 'Unknown error'}`;
+                        }
+                    });
+                };
+                
+                reader.onerror = () => {
+                    statusDiv.innerHTML = 'Error reading blob data';
+                };
+                
+                reader.readAsDataURL(zipBlob);
+                
+            } catch (error) {
+                console.error('Test error:', error);
+                statusDiv.innerHTML = `Error: ${error.message}`;
+            }
+        });
+    </script>
+</body>
+</html> 

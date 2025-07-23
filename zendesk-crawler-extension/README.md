@@ -1,201 +1,194 @@
-# Zendesk Help Center Crawler - Browser Extension
+# Zendesk Help Center Crawler Extension
 
-A Chrome browser extension that automatically detects and crawls any Zendesk Help Center using your existing authenticated session. Works with any company's Zendesk Help Center - just navigate to the site and start crawling!
+A Chrome extension for crawling Zendesk Help Centers and exporting content as structured markdown files with attachments.
 
 ## Features
 
-- **Authenticated Crawling**: Uses your existing login session (no OIDC/SSO issues)
-- **Automatic Discovery**: Finds and crawls categories, sections, and articles
-- **Content Extraction**: Extracts text, links, images, and metadata
-- **Hierarchy Mapping**: Identifies category/section/article relationships
-- **Export Functionality**: Exports data as JSON for further processing
+### 🎯 **Core Functionality**
+- **Automatic Detection**: Detects Zendesk Help Center pages automatically
+- **Comprehensive Crawling**: Crawls all articles, categories, and sections
+- **Hierarchy Preservation**: Maintains the original Help Center structure
+- **Media Extraction**: Downloads images, PDFs, videos, and other attachments
+
+### 📁 **Structured Export**
+- **Directory Structure**: Creates folders that mirror the Help Center hierarchy
+- **Markdown Files**: Each article becomes a properly formatted markdown file
+- **Attachment Directories**: Media files are organized in `{article_name}_attachments` folders
+- **Single Download**: Everything packaged in one downloadable ZIP file
+
+### 🔧 **Export Structure**
+```
+zendesk_help_center_export.zip/
+├── README.md                           # Site structure overview
+├── Category_Name/
+│   └── Section_Name/
+│       └── Article_Name/
+│           ├── Article_Name.md         # Article content
+│           └── Article_Name_attachments/
+│               ├── media_1.jpg         # Downloaded images
+│               ├── media_2.pdf         # Downloaded PDFs
+│               └── media_1.jpg.url     # Original URLs for reference
+```
 
 ## Installation
 
-### Method 1: Load Unpacked Extension (Recommended)
+1. **Download the Extension**
+   ```bash
+   git clone <repository-url>
+   cd zendesk-crawler-extension
+   ```
 
-1. **Download the extension files** to your computer
-2. **Open Chrome** and go to `chrome://extensions/`
-3. **Enable "Developer mode"** (toggle in top right)
-4. **Click "Load unpacked"** and select the `zendesk-crawler-extension` folder
-5. **The extension should appear** in your extensions list
+2. **Load in Chrome**
+   - Open Chrome and go to `chrome://extensions/`
+   - Enable "Developer mode"
+   - Click "Load unpacked"
+   - Select the `zendesk-crawler-extension` folder
 
-### Method 2: From Source
-
-1. **Clone or download** this repository
-2. **Navigate to the extension folder**: `cd zendesk-crawler-extension`
-3. **Follow Method 1** above
+3. **Verify Installation**
+   - The extension icon should appear in your toolbar
+   - Navigate to any Zendesk Help Center to test
 
 ## Usage
 
-### Prerequisites
+### 🚀 **Getting Started**
 
-- **Chrome browser** (or Chromium-based browser)
-- **Access to any Zendesk Help Center** (you should be logged in)
-- **The extension automatically detects Zendesk Help Centers** - no configuration needed
+1. **Navigate to a Zendesk Help Center**
+   - Go to any Zendesk Help Center (e.g., `https://help.example.com`)
+   - The extension will automatically detect it
 
-### Steps
+2. **Start Crawling**
+   - Click the extension icon
+   - Click "Start Crawling"
+   - Watch the progress as it crawls all articles
 
-1. **Navigate to any Zendesk Help Center**
-   - Examples: 
-     - `https://support.yourcompany.com/hc/en-us`
-     - `https://help.yourcompany.com/`
-     - `https://docs.yourcompany.com/`
-     - `https://knowledge.yourcompany.com/`
-   - Make sure you're logged in
-   - The extension will automatically detect if it's a Zendesk Help Center
+3. **Export Data**
+   - Click "Export Data" when crawling is complete
+   - Choose where to save the ZIP file
+   - Extract and explore the structured content
 
-2. **Click the extension icon** in your browser toolbar
-   - You should see the "Zendesk Crawler" popup
+### 📊 **Progress Tracking**
 
-3. **Click "Start Crawling"**
-   - The extension will begin crawling the current page
-   - It will automatically discover and visit linked pages
-   - Progress is shown in real-time
+- **Pages Crawled**: Shows total articles processed
+- **Links Found**: Shows internal links discovered
+- **Content Size**: Shows total content size in KB
+- **Real-time Updates**: Counters update as crawling progresses
 
-4. **Monitor Progress**
-   - Watch the status updates in the popup
-   - Check the browser console for detailed logs
-   - The extension will crawl categories → sections → articles
+### 📁 **Export Contents**
 
-5. **Export Data**
-   - Click "Export Data" to download the crawled content as JSON
-   - The file will be saved as `zendesk_crawled_data_YYYY-MM-DD.json`
+The exported ZIP file contains:
 
-### What Gets Crawled
+- **README.md**: Complete site structure with links
+- **Structured Directories**: Organized by category → section → article
+- **Markdown Files**: Clean, formatted content for each article
+- **Media Files**: Downloaded images, PDFs, videos, and documents
+- **URL References**: Original URLs for all media files
 
-- **Categories**: `/hc/en-us/categories/123-category-name`
-- **Sections**: `/hc/en-us/sections/456-section-name`
-- **Articles**: `/hc/en-us/articles/789-article-title`
-- **Root pages**: `/hc/en-us`
+## Technical Details
 
-### What Gets Extracted
+### 🔍 **Content Detection**
+- Automatically detects Zendesk Help Center URLs
+- Supports various Zendesk URL patterns
+- Extracts hierarchy from URLs and page content
 
-For each page:
-- **Title**: Page title
-- **Content**: Full text content
-- **Links**: All Zendesk content links found
-- **Images**: All images with URLs and alt text
-- **Metadata**: Last updated date, breadcrumbs, hierarchy info
+### 📝 **Content Processing**
+- Converts HTML to clean markdown
+- Preserves headings, lists, and formatting
+- Extracts metadata (last updated, breadcrumbs)
+- Handles images, videos, PDFs, and documents
 
-## Data Structure
+### 🖼️ **Media Handling**
+- Downloads images and other media files
+- Organizes attachments by article
+- Preserves original file extensions
+- Provides fallback URL references
 
-The exported JSON contains an array of page objects:
+### 🏗️ **Architecture**
+- **Popup**: User interface and export functionality
+- **Content Script**: Crawling logic and content extraction
+- **Background Script**: State management and persistence
+- **Storage**: Chrome storage for data persistence
 
-```json
-[
-  {
-    "url": "https://support.company.com/hc/en-us/articles/123-article",
-    "title": "Article Title",
-    "content": "Full article content...",
-    "links": [
-      {
-        "url": "https://support.company.com/hc/en-us/sections/456-section",
-        "text": "Section Name"
-      }
-    ],
-    "images": [
-      {
-        "url": "https://support.company.com/image.png",
-        "alt": "Image description",
-        "title": "Image title"
-      }
-    ],
-    "metadata": {
-      "title": "Article Title",
-      "url": "https://support.company.com/hc/en-us/articles/123-article",
-      "lastUpdated": "2024-01-15",
-      "breadcrumb": "Home > Category > Section",
-      "hierarchy": {
-        "category": {"id": "123", "name": "category-name"},
-        "section": {"id": "456", "name": "section-name"},
-        "article": {"id": "789", "name": "article-title"}
-      }
-    }
-  }
-]
+## Python Integration
+
+The exported data is designed to work with Python processing scripts:
+
+```python
+# Example usage with zendesk_processor.py
+from zendesk_processor import process_export
+
+# Process the exported ZIP file
+process_export('zendesk_help_center_export.zip')
 ```
 
 ## Troubleshooting
 
-### Extension Not Working
+### ❓ **Common Issues**
 
-1. **Check if you're on a Zendesk Help Center page**
-   - URL should contain `zendesk.com/hc/`
-   - Extension only works on Help Center pages
+1. **Extension Not Detecting Zendesk**
+   - Ensure you're on a valid Zendesk Help Center
+   - Check that the URL contains `/hc/` or similar patterns
+   - Try refreshing the page
 
-2. **Check browser console for errors**
-   - Press F12 to open developer tools
-   - Look for error messages in the Console tab
+2. **Crawling Not Starting**
+   - Make sure you're on a Zendesk Help Center page
+   - Check browser console for errors
+   - Try reloading the extension
 
-3. **Verify permissions**
-   - Go to `chrome://extensions/`
-   - Find the extension and click "Details"
-   - Ensure all permissions are granted
+3. **Export Fails**
+   - Ensure you have crawled some data first
+   - Check that you have sufficient disk space
+   - Verify Chrome download permissions
 
-### No Content Found
+4. **Media Not Downloading**
+   - Some media may be blocked by CORS policies
+   - Check the `.url` files for original URLs
+   - Manual download may be required for some files
 
-1. **Make sure you're logged in**
-   - The extension uses your existing session
-   - If you're not logged in, content may be limited
+### 🔧 **Debug Mode**
 
-2. **Check the page structure**
-   - Some Zendesk instances may have custom layouts
-   - The extension looks for standard Zendesk patterns
-
-### Crawling Stops Unexpectedly
-
-1. **Check the console logs**
-   - Look for error messages
-   - The extension logs detailed information
-
-2. **Try starting from a different page**
-   - Start from the main Help Center page (`/hc/en-us`)
-   - Or try a specific category page
+Enable debug logging by opening the browser console:
+1. Press F12 to open Developer Tools
+2. Go to Console tab
+3. Look for extension-related logs
 
 ## Development
 
-### File Structure
-
+### 📁 **File Structure**
 ```
 zendesk-crawler-extension/
 ├── manifest.json          # Extension configuration
 ├── popup.html            # Extension popup UI
-├── popup.js              # Popup functionality
-├── content.js            # Content script (runs on pages)
+├── popup.js              # Popup logic and export
+├── content.js            # Content crawling logic
 ├── background.js         # Background service worker
-├── icons/                # Extension icons
 └── README.md            # This file
 ```
 
-### Modifying the Extension
+### 🛠️ **Modifying the Extension**
 
-1. **Edit the files** as needed
-2. **Go to `chrome://extensions/`**
-3. **Click the refresh icon** on the extension
-4. **Test your changes**
+1. **Adding New Media Types**
+   - Edit `content.js` to add new selectors
+   - Update `getMediaFilename()` in `popup.js`
 
-### Adding Features
+2. **Changing Export Structure**
+   - Modify `createStructuredExport()` in `popup.js`
+   - Update `organizeDataByHierarchy()` for new organization
 
-- **New content types**: Modify `content.js` extraction logic
-- **Different export formats**: Update `popup.js` export function
-- **Additional metadata**: Extend `extractMetadata()` in `content.js`
+3. **Enhancing Crawling**
+   - Modify `content.js` for new content extraction
+   - Update `isZendeskContentLink()` for new URL patterns
 
-## Security Notes
+## License
 
-- **No data is sent to external servers**
-- **All data is stored locally** in Chrome's storage
-- **The extension only accesses Zendesk Help Center pages**
-- **Your login credentials are never accessed**
+This extension is provided as-is for educational and development purposes.
 
 ## Support
 
 For issues or questions:
-1. **Check the browser console** for error messages
-2. **Verify you're on a Zendesk Help Center page**
-3. **Ensure you're logged in** to the Help Center
-4. **Try refreshing the extension** in `chrome://extensions/`
+1. Check the troubleshooting section above
+2. Review browser console for error messages
+3. Ensure you're using a supported Zendesk Help Center
 
-## License
+---
 
-This extension is provided as-is for educational and development purposes. 
+**Happy Crawling! 🕷️** 

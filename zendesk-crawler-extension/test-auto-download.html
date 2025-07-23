@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Auto Download Test</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      padding: 20px;
+    }
+    .status {
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 4px;
+      background-color: #f8f9fa;
+    }
+    button {
+      padding: 10px;
+      margin: 5px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      background-color: #3498db;
+      color: white;
+    }
+    .log {
+      background-color: #f1f1f1;
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 12px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+  </style>
+</head>
+<body>
+  <h2>Auto Download Test</h2>
+  
+  <div id="status" class="status">
+    <div>Buffer Size: <span id="bufferSize">0</span> bytes</div>
+    <div>Buffer Files: <span id="bufferFiles">0</span></div>
+    <div>Chunks Written: <span id="chunksWritten">0</span></div>
+    <div>Chunks Downloaded: <span id="chunksDownloaded">0</span></div>
+  </div>
+  
+  <button onclick="addLargeFile()">Add Large File (1MB)</button>
+  <button onclick="addSmallFile()">Add Small File (100KB)</button>
+  <button onclick="checkStorage()">Check Storage</button>
+  <button onclick="clearStorage()">Clear Storage</button>
+  
+  <div class="log" id="log"></div>
+  
+  <script>
+    // Mock Chrome API for testing
+    window.chrome = {
+      storage: {
+        local: {
+          get: function(keys, callback) {
+            const data = JSON.parse(localStorage.getItem('testData') || '{}');
+            callback(data);
+          },
+          set: function(data) {
+            localStorage.setItem('testData', JSON.stringify(data));
+            console.log('Storage updated:', data);
+            log('Storage updated: ' + JSON.stringify(data, null, 2));
+          },
+          onChanged: {
+            addListener: function(callback) {
+              console.log('Storage listener added');
+            }
+          }
+        }
+      },
+      runtime: {
+        sendMessage: function(message, callback) {
+          console.log('Message sent to background:', message);
+          log('Message sent: ' + JSON.stringify(message.action));
+          
+          if (message.action === 'downloadChunk') {
+            // Simulate successful download
+            setTimeout(() => {
+              console.log('Download started:', message.data.filename);
+              log('Download started: ' + message.data.filename);
+              callback({success: true, downloadId: Date.now()});
+            }, 1000);
+          }
+        },
+        lastError: null
+      }
+    };
+    
+    function log(message) {
+      const logDiv = document.getElementById('log');
+      const timestamp = new Date().toLocaleTimeString();
+      logDiv.innerHTML += `[${timestamp}] ${message}\n`;
+      logDiv.scrollTop = logDiv.scrollHeight;
+    }
+    
+    function addLargeFile() {
+      log('Adding large file (1MB)...');
+      
+      // Create a large file that will trigger download
+      const largeData = {
+        title: 'Large Test File',
+        content: 'A'.repeat(1024 * 1024), // 1MB of data
+        url: 'https://test.com/large-file',
+        metadata: { hierarchy: { category: { name: 'Test' }, section: { name: 'Large' } } }
+      };
+      
+      simulateSaveAutoDownloadData(largeData);
+    }
+    
+    function addSmallFile() {
+      log('Adding small file (100KB)...');
+      
+      // Create a small file
+      const smallData = {
+        title: 'Small Test File',
+        content: 'A'.repeat(100 * 1024), // 100KB of data
+        url: 'https://test.com/small-file',
+        metadata: { hierarchy: { category: { name: 'Test' }, section: { name: 'Small' } } }
+      };
+      
+      simulateSaveAutoDownloadData(smallData);
+    }
+    
+    function simulateSaveAutoDownloadData(pageData) {
+      chrome.storage.local.get(['dataBuffer', 'bufferSize', 'chunkCounter'], (result) => {
+        let dataBuffer = result.dataBuffer || [];
+        let bufferSize = result.bufferSize || 0;
+        let chunkCounter = result.chunkCounter || 0;
+        
+        // Add new page to buffer
+        dataBuffer.push(pageData);
+        bufferSize += JSON.stringify(pageData).length;
+        
+        log(`Buffer size: ${bufferSize} bytes (${Math.round(bufferSize / 1024)}KB)`);
+        
+        // If buffer is getting large, download and purge
+        if (bufferSize > 1024 * 1024) { // 1MB buffer limit
+          log('Buffer limit reached! Triggering download...');
+          
+          // Simulate download success
+          setTimeout(() => {
+            chunkCounter++;
+            log(`Download completed. Chunk ${chunkCounter} written.`);
+            
+            // Clear buffer after successful download
+            chrome.storage.local.set({
+              dataBuffer: [],
+              bufferSize: 0,
+              chunkCounter: chunkCounter
+            }, () => {
+              updateStatus();
+            });
+          }, 2000);
+        } else {
+          // Just update buffer
+          chrome.storage.local.set({
+            dataBuffer: dataBuffer,
+            bufferSize: bufferSize,
+            chunkCounter: chunkCounter
+          }, () => {
+            updateStatus();
+          });
+        }
+      });
+    }
+    
+    function checkStorage() {
+      chrome.storage.local.get(null, (result) => {
+        console.log('Current storage:', result);
+        log('Storage check: ' + JSON.stringify(result, null, 2));
+      });
+    }
+    
+    function clearStorage() {
+      chrome.storage.local.set({
+        dataBuffer: [],
+        bufferSize: 0,
+        chunkCounter: 0,
+        chunksDownloaded: 0,
+        pendingDownloads: {}
+      }, () => {
+        updateStatus();
+        log('Storage cleared');
+      });
+    }
+    
+    function updateStatus() {
+      chrome.storage.local.get(['dataBuffer', 'bufferSize', 'chunkCounter', 'chunksDownloaded'], (result) => {
+        document.getElementById('bufferSize').textContent = result.bufferSize || 0;
+        document.getElementById('bufferFiles').textContent = (result.dataBuffer || []).length;
+        document.getElementById('chunksWritten').textContent = result.chunkCounter || 0;
+        document.getElementById('chunksDownloaded').textContent = result.chunksDownloaded || 0;
+      });
+    }
+    
+    // Initialize
+    updateStatus();
+    log('Test initialized');
+  </script>
+</body>
+</html> 

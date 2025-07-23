@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zendesk Crawler Extension Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .status.success { background-color: #d4edda; color: #155724; }
+        .status.error { background-color: #f8d7da; color: #721c24; }
+        .status.warning { background-color: #fff3cd; color: #856404; }
+        .status.info { background-color: #d1ecf1; color: #0c5460; }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #6c757d; cursor: not-allowed; }
+        .log {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Zendesk Crawler Extension Test</h1>
+    
+    <div class="test-section">
+        <h2>Extension Status</h2>
+        <div id="extensionStatus" class="status info">Checking extension status...</div>
+        <button onclick="checkExtension()">Check Extension</button>
+        <button onclick="testStorage()">Test Storage</button>
+        <button onclick="clearStorage()">Clear Storage</button>
+    </div>
+    
+    <div class="test-section">
+        <h2>Simulated Zendesk Environment</h2>
+        <div id="zendeskStatus" class="status warning">Not on a Zendesk site</div>
+        <button onclick="simulateZendesk()">Simulate Zendesk Site</button>
+        <button onclick="resetSimulation()">Reset Simulation</button>
+    </div>
+    
+    <div class="test-section">
+        <h2>Test Logs</h2>
+        <div id="testLogs" class="log"></div>
+        <button onclick="clearLogs()">Clear Logs</button>
+    </div>
+    
+    <div class="test-section">
+        <h2>Extension Features Test</h2>
+        <button onclick="testContentScript()">Test Content Script Injection</button>
+        <button onclick="testCommunication()">Test Popup-Content Communication</button>
+        <button onclick="testCrawling()">Test Crawling Logic (Simulated)</button>
+    </div>
+
+    <script>
+        function log(message, type = 'info') {
+            const logs = document.getElementById('testLogs');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.innerHTML = `[${timestamp}] ${message}`;
+            logEntry.style.color = type === 'error' ? 'red' : type === 'success' ? 'green' : 'black';
+            logs.appendChild(logEntry);
+            logs.scrollTop = logs.scrollHeight;
+        }
+
+        function clearLogs() {
+            document.getElementById('testLogs').innerHTML = '';
+        }
+
+        function updateStatus(elementId, message, type) {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.className = `status ${type}`;
+        }
+
+        function checkExtension() {
+            log('Checking extension availability...');
+            
+            if (typeof chrome !== 'undefined' && chrome.runtime) {
+                try {
+                    chrome.runtime.getManifest();
+                    updateStatus('extensionStatus', 'Extension is available and loaded', 'success');
+                    log('Extension manifest loaded successfully', 'success');
+                } catch (error) {
+                    updateStatus('extensionStatus', 'Extension context invalidated', 'error');
+                    log(`Extension error: ${error.message}`, 'error');
+                }
+            } else {
+                updateStatus('extensionStatus', 'Chrome extension API not available', 'error');
+                log('Chrome extension API not available', 'error');
+            }
+        }
+
+        function testStorage() {
+            log('Testing Chrome storage...');
+            
+            if (typeof chrome !== 'undefined' && chrome.storage) {
+                try {
+                    chrome.storage.local.set({test: 'test_value'}, function() {
+                        if (chrome.runtime.lastError) {
+                            log(`Storage error: ${chrome.runtime.lastError.message}`, 'error');
+                        } else {
+                            log('Storage write successful', 'success');
+                            
+                            chrome.storage.local.get(['test'], function(result) {
+                                if (chrome.runtime.lastError) {
+                                    log(`Storage read error: ${chrome.runtime.lastError.message}`, 'error');
+                                } else {
+                                    log(`Storage read successful: ${result.test}`, 'success');
+                                }
+                            });
+                        }
+                    });
+                } catch (error) {
+                    log(`Storage test failed: ${error.message}`, 'error');
+                }
+            } else {
+                log('Chrome storage API not available', 'error');
+            }
+        }
+
+        function clearStorage() {
+            log('Clearing Chrome storage...');
+            
+            if (typeof chrome !== 'undefined' && chrome.storage) {
+                try {
+                    chrome.storage.local.clear(function() {
+                        if (chrome.runtime.lastError) {
+                            log(`Storage clear error: ${chrome.runtime.lastError.message}`, 'error');
+                        } else {
+                            log('Storage cleared successfully', 'success');
+                        }
+                    });
+                } catch (error) {
+                    log(`Storage clear failed: ${error.message}`, 'error');
+                }
+            } else {
+                log('Chrome storage API not available', 'error');
+            }
+        }
+
+        function simulateZendesk() {
+            log('Simulating Zendesk Help Center environment...');
+            
+            // Simulate Zendesk URL
+            Object.defineProperty(window.location, 'href', {
+                value: 'https://support.example.com/hc/en-us',
+                writable: true
+            });
+            
+            Object.defineProperty(window.location, 'pathname', {
+                value: '/hc/en-us',
+                writable: true
+            });
+            
+            Object.defineProperty(window.location, 'origin', {
+                value: 'https://support.example.com',
+                writable: true
+            });
+            
+            updateStatus('zendeskStatus', 'Simulated Zendesk Help Center environment', 'success');
+            log('Zendesk environment simulated successfully', 'success');
+        }
+
+        function resetSimulation() {
+            log('Resetting simulation...');
+            
+            // Reset to original location
+            Object.defineProperty(window.location, 'href', {
+                value: window.location.href,
+                writable: true
+            });
+            
+            updateStatus('zendeskStatus', 'Not on a Zendesk site', 'warning');
+            log('Simulation reset', 'info');
+        }
+
+        function testContentScript() {
+            log('Testing content script injection...');
+            
+            // Check if content script is loaded
+            if (typeof ZendeskCrawler !== 'undefined') {
+                log('ZendeskCrawler class found', 'success');
+                
+                try {
+                    const crawler = new ZendeskCrawler();
+                    log('ZendeskCrawler instance created successfully', 'success');
+                    log(`Is Zendesk Help Center: ${crawler.isZendeskHelpCenter}`, 'info');
+                } catch (error) {
+                    log(`ZendeskCrawler instantiation failed: ${error.message}`, 'error');
+                }
+            } else {
+                log('ZendeskCrawler class not found - content script may not be loaded', 'error');
+            }
+        }
+
+        function testCommunication() {
+            log('Testing popup-content script communication...');
+            
+            if (typeof chrome !== 'undefined' && chrome.tabs) {
+                try {
+                    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+                        if (chrome.runtime.lastError) {
+                            log(`Tab query error: ${chrome.runtime.lastError.message}`, 'error');
+                        } else {
+                            log(`Found ${tabs.length} active tabs`, 'success');
+                            
+                            if (tabs.length > 0) {
+                                chrome.tabs.sendMessage(tabs[0].id, {action: 'test'}, function(response) {
+                                    if (chrome.runtime.lastError) {
+                                        log(`Message send error: ${chrome.runtime.lastError.message}`, 'error');
+                                    } else {
+                                        log('Message sent successfully', 'success');
+                                        log(`Response: ${JSON.stringify(response)}`, 'info');
+                                    }
+                                });
+                            }
+                        }
+                    });
+                } catch (error) {
+                    log(`Communication test failed: ${error.message}`, 'error');
+                }
+            } else {
+                log('Chrome tabs API not available', 'error');
+            }
+        }
+
+        function testCrawling() {
+            log('Testing crawling logic (simulated)...');
+            
+            if (typeof ZendeskCrawler !== 'undefined') {
+                try {
+                    const crawler = new ZendeskCrawler();
+                    
+                    // Test URL detection
+                    const testUrls = [
+                        'https://support.example.com/hc/en-us',
+                        'https://support.example.com/hc/en-us/categories/123-test-category',
+                        'https://support.example.com/hc/en-us/sections/456-test-section',
+                        'https://support.example.com/hc/en-us/articles/789-test-article',
+                        'https://example.com/not-zendesk'
+                    ];
+                    
+                    testUrls.forEach(url => {
+                        const isContent = crawler.isZendeskContentLink(url);
+                        log(`URL: ${url} -> Is content: ${isContent}`, 'info');
+                    });
+                    
+                    // Test hierarchy extraction
+                    const hierarchy = crawler.extractHierarchy('https://support.example.com/hc/en-us/categories/123-test-category/sections/456-test-section/articles/789-test-article');
+                    log(`Hierarchy extraction: ${JSON.stringify(hierarchy)}`, 'info');
+                    
+                    log('Crawling logic tests completed', 'success');
+                } catch (error) {
+                    log(`Crawling test failed: ${error.message}`, 'error');
+                }
+            } else {
+                log('ZendeskCrawler not available for testing', 'error');
+            }
+        }
+
+        // Auto-check extension on page load
+        window.addEventListener('load', function() {
+            log('Test page loaded', 'info');
+            setTimeout(checkExtension, 1000);
+        });
+    </script>
+</body>
+</html> 

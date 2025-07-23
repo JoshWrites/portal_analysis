@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Download Test</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      padding: 20px;
+    }
+    .status {
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 4px;
+      background-color: #f8f9fa;
+    }
+    button {
+      padding: 10px;
+      margin: 5px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      background-color: #3498db;
+      color: white;
+    }
+  </style>
+</head>
+<body>
+  <h2>Download Tracking Test</h2>
+  
+  <div id="status" class="status">
+    <div>Chunks Written: <span id="chunksWritten">0</span></div>
+    <div>Chunks Downloaded: <span id="chunksDownloaded">0</div>
+    <div>Pending Downloads: <span id="pendingDownloads">0</span></div>
+  </div>
+  
+  <button onclick="testDownload()">Test Download</button>
+  <button onclick="checkStorage()">Check Storage</button>
+  <button onclick="clearStorage()">Clear Storage</button>
+  
+  <script>
+    // Mock Chrome API for testing
+    window.chrome = {
+      storage: {
+        local: {
+          get: function(keys, callback) {
+            const data = JSON.parse(localStorage.getItem('testData') || '{}');
+            callback(data);
+          },
+          set: function(data) {
+            localStorage.setItem('testData', JSON.stringify(data));
+            console.log('Storage updated:', data);
+          },
+          onChanged: {
+            addListener: function(callback) {
+              console.log('Storage listener added');
+            }
+          }
+        }
+      },
+      downloads: {
+        download: function(options, callback) {
+          console.log('Download requested:', options.filename);
+          // Simulate download completion after 2 seconds
+          setTimeout(() => {
+            console.log('Download completed:', options.filename);
+            callback(1); // downloadId
+          }, 2000);
+        },
+        onChanged: {
+          addListener: function(callback) {
+            console.log('Download listener added');
+            // Simulate download completion
+            setTimeout(() => {
+              callback({
+                id: 1,
+                state: { current: 'complete' }
+              });
+            }, 2500);
+          }
+        }
+      }
+    };
+    
+    function testDownload() {
+      console.log('Testing download...');
+      
+      // Simulate chunk creation
+      chrome.storage.local.get(['chunkCounter', 'chunksDownloaded', 'pendingDownloads'], (result) => {
+        const chunkCounter = (result.chunkCounter || 0) + 1;
+        const pendingDownloads = result.pendingDownloads || {};
+        
+        // Add a pending download
+        pendingDownloads[1] = {
+          filename: `test_chunk_${chunkCounter}.zip`,
+          timestamp: new Date().toISOString(),
+          chunkNumber: chunkCounter
+        };
+        
+        chrome.storage.local.set({
+          chunkCounter: chunkCounter,
+          pendingDownloads: pendingDownloads
+        }, () => {
+          updateStatus();
+        });
+      });
+    }
+    
+    function checkStorage() {
+      chrome.storage.local.get(null, (result) => {
+        console.log('Current storage:', result);
+        alert('Check console for storage data');
+      });
+    }
+    
+    function clearStorage() {
+      chrome.storage.local.set({
+        chunkCounter: 0,
+        chunksDownloaded: 0,
+        pendingDownloads: {}
+      }, () => {
+        updateStatus();
+        console.log('Storage cleared');
+      });
+    }
+    
+    function updateStatus() {
+      chrome.storage.local.get(['chunkCounter', 'chunksDownloaded', 'pendingDownloads'], (result) => {
+        document.getElementById('chunksWritten').textContent = result.chunkCounter || 0;
+        document.getElementById('chunksDownloaded').textContent = result.chunksDownloaded || 0;
+        document.getElementById('pendingDownloads').textContent = Object.keys(result.pendingDownloads || {}).length;
+      });
+    }
+    
+    // Initialize
+    updateStatus();
+  </script>
+</body>
+</html> 

@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Simple Counter Test</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    .stats { margin: 20px 0; padding: 10px; background: #f0f0f0; }
+    button { margin: 5px; padding: 10px; }
+  </style>
+</head>
+<body>
+  <h1>Simple Counter Test</h1>
+  
+  <div class="stats">
+    <div>Pages crawled: <span id="pagesCrawled">0</span></div>
+    <div>Links found: <span id="linksFound">0</span></div>
+    <div>Content size: <span id="contentSize">0 KB</span></div>
+  </div>
+  
+  <button onclick="testCounters()">Test Counters</button>
+  <button onclick="clearData()">Clear Data</button>
+  <button onclick="checkStorage()">Check Storage</button>
+  
+  <div id="debug"></div>
+  
+  <script>
+    // Simple storage simulation
+    let storageData = {
+      crawledData: []
+    };
+    
+    function log(message) {
+      console.log(message);
+      document.getElementById('debug').innerHTML += '<div>' + message + '</div>';
+    }
+    
+    function testCounters() {
+      log('Test button clicked');
+      
+      const testData = [
+        {
+          url: 'https://test.com/page1',
+          title: 'Test Page 1',
+          content: 'This is test content for page 1',
+          links: ['https://test.com/link1', 'https://test.com/link2'],
+          images: []
+        },
+        {
+          url: 'https://test.com/page2',
+          title: 'Test Page 2',
+          content: 'This is test content for page 2 with more text to make it longer',
+          links: ['https://test.com/link3'],
+          images: []
+        }
+      ];
+      
+      log('Setting test data: ' + JSON.stringify(testData));
+      storageData.crawledData = testData;
+      updateCounters();
+      log('Counters updated');
+    }
+    
+    function clearData() {
+      log('Clearing data');
+      storageData.crawledData = [];
+      updateCounters();
+    }
+    
+    function checkStorage() {
+      log('Current storage: ' + JSON.stringify(storageData));
+    }
+    
+    function updateCounters() {
+      const data = storageData.crawledData || [];
+      log('Updating counters with ' + data.length + ' pages');
+      
+      // Update counters
+      document.getElementById('pagesCrawled').textContent = data.length;
+      
+      const totalLinks = data.reduce((sum, page) => sum + (page.links ? page.links.length : 0), 0);
+      document.getElementById('linksFound').textContent = totalLinks;
+      
+      const totalSize = data.reduce((sum, page) => sum + (page.content ? page.content.length : 0), 0);
+      document.getElementById('contentSize').textContent = `${Math.round(totalSize / 1024)} KB (${totalSize} bytes)`;
+      
+      log('Counters updated: pages=' + data.length + ', links=' + totalLinks + ', size=' + totalSize);
+    }
+    
+    // Initialize
+    log('Page loaded');
+    updateCounters();
+  </script>
+</body>
+</html> 

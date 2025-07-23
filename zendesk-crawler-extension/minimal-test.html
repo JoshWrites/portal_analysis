@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Minimal Test</title>
+</head>
+<body>
+  <h1>Minimal Test</h1>
+  
+  <div>Pages crawled: <span id="pagesCrawled">0</span></div>
+  <div>Links found: <span id="linksFound">0</span></div>
+  <div>Content size: <span id="contentSize">0 KB</span></div>
+  
+  <button id="testBtn">Test Counters</button>
+  
+  <div id="debug"></div>
+  
+  <script>
+    console.log('Script loaded');
+    
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('DOM loaded');
+      
+      const testBtn = document.getElementById('testBtn');
+      const pagesCrawled = document.getElementById('pagesCrawled');
+      const linksFound = document.getElementById('linksFound');
+      const contentSize = document.getElementById('contentSize');
+      const debug = document.getElementById('debug');
+      
+      console.log('Elements found:', {
+        testBtn: !!testBtn,
+        pagesCrawled: !!pagesCrawled,
+        linksFound: !!linksFound,
+        contentSize: !!contentSize
+      });
+      
+      testBtn.addEventListener('click', function() {
+        console.log('Test button clicked');
+        debug.innerHTML += '<div>Button clicked!</div>';
+        
+        // Update counters
+        pagesCrawled.textContent = '2';
+        linksFound.textContent = '3';
+        contentSize.textContent = '1 KB';
+        
+        debug.innerHTML += '<div>Counters updated!</div>';
+      });
+    });
+  </script>
+</body>
+</html> 

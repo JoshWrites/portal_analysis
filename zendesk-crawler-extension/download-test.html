@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Download Test</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      padding: 20px;
+    }
+    .status {
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 4px;
+      background-color: #f8f9fa;
+    }
+    button {
+      padding: 10px;
+      margin: 5px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      background-color: #3498db;
+      color: white;
+    }
+    .log {
+      background-color: #f1f1f1;
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 12px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+  </style>
+</head>
+<body>
+  <h2>Real Download Test</h2>
+  
+  <div id="status" class="status">
+    <div>Buffer Size: <span id="bufferSize">0</span> bytes</div>
+    <div>Buffer Files: <span id="bufferFiles">0</span></div>
+    <div>Chunks Written: <span id="chunksWritten">0</span></div>
+    <div>Chunks Downloaded: <span id="chunksDownloaded">0</span></div>
+  </div>
+  
+  <button onclick="testDownload()">Test Real Download</button>
+  <button onclick="checkStorage()">Check Storage</button>
+  <button onclick="clearStorage()">Clear Storage</button>
+  
+  <div class="log" id="log"></div>
+  
+  <script>
+    function log(message) {
+      const logDiv = document.getElementById('log');
+      const timestamp = new Date().toLocaleTimeString();
+      logDiv.innerHTML += `[${timestamp}] ${message}\n`;
+      logDiv.scrollTop = logDiv.scrollHeight;
+      console.log(message);
+    }
+    
+    function testDownload() {
+      log('Testing real download...');
+      
+      // Create a large file that will trigger download
+      const largeData = {
+        title: 'Large Test File',
+        content: 'A'.repeat(1024 * 1024), // 1MB of data
+        url: 'https://test.com/large-file',
+        metadata: { 
+          hierarchy: { 
+            category: { name: 'Test' }, 
+            section: { name: 'Large' } 
+          } 
+        }
+      };
+      
+      // Simulate the saveAutoDownloadData function
+      simulateSaveAutoDownloadData(largeData);
+    }
+    
+    function simulateSaveAutoDownloadData(pageData) {
+      chrome.storage.local.get(['dataBuffer', 'bufferSize', 'chunkCounter'], (result) => {
+        let dataBuffer = result.dataBuffer || [];
+        let bufferSize = result.bufferSize || 0;
+        let chunkCounter = result.chunkCounter || 0;
+        
+        // Add new page to buffer
+        dataBuffer.push(pageData);
+        bufferSize += JSON.stringify(pageData).length;
+        
+        log(`Buffer size: ${bufferSize} bytes (${Math.round(bufferSize / 1024)}KB)`);
+        
+        // If buffer is getting large, download and purge
+        if (bufferSize > 1024 * 1024) { // 1MB buffer limit
+          log('Buffer limit reached! Triggering download...');
+          
+          // Create a mock downloadChunk call
+          downloadChunk(dataBuffer).then((success) => {
+            if (success) {
+              chunkCounter++;
+              log(`Download completed. Chunk ${chunkCounter} written.`);
+              
+              // Clear buffer after successful download
+              chrome.storage.local.set({
+                dataBuffer: [],
+                bufferSize: 0,
+                chunkCounter: chunkCounter
+              }, () => {
+                updateStatus();
+              });
+            } else {
+              log('Download failed!');
+            }
+          });
+        } else {
+          // Just update buffer
+          chrome.storage.local.set({
+            dataBuffer: dataBuffer,
+            bufferSize: bufferSize,
+            chunkCounter: chunkCounter
+          }, () => {
+            updateStatus();
+          });
+        }
+      });
+    }
+    
+    async function downloadChunk(dataBuffer) {
+      try {
+        // This would normally be in the content script
+        // For testing, we'll simulate the download process
+        log('Creating ZIP file...');
+        
+        // Simulate ZIP creation
+        const zipBlob = new Blob(['Mock ZIP content'], { type: 'application/zip' });
+        
+        // Convert to base64
+        const reader = new FileReader();
+        return new Promise((resolve) => {
+          reader.onload = () => {
+            const base64Data = reader.result.split(',')[1];
+            
+            log('Sending download request to background script...');
+            
+            // Send to background script
+            chrome.runtime.sendMessage({
+              action: 'downloadChunk',
+              data: {
+                filename: 'test_chunk_001.zip',
+                base64Data: base64Data,
+                chunkNumber: 1,
+                runId: 'test-run'
+              }
+            }, (response) => {
+              if (chrome.runtime.lastError) {
+                log('Download error: ' + chrome.runtime.lastError.message);
+                resolve(false);
+              } else if (response && response.success) {
+                log('Download started successfully!');
+                resolve(true);
+              } else {
+                log('Download failed: ' + JSON.stringify(response));
+                resolve(false);
+              }
+            });
+          };
+          
+          reader.readAsDataURL(zipBlob);
+        });
+        
+      } catch (error) {
+        log('Error in downloadChunk: ' + error.message);
+        return false;
+      }
+    }
+    
+    function checkStorage() {
+      chrome.storage.local.get(null, (result) => {
+        console.log('Current storage:', result);
+        log('Storage check: ' + JSON.stringify(result, null, 2));
+      });
+    }
+    
+    function clearStorage() {
+      chrome.storage.local.set({
+        dataBuffer: [],
+        bufferSize: 0,
+        chunkCounter: 0,
+        chunksDownloaded: 0,
+        pendingDownloads: {}
+      }, () => {
+        updateStatus();
+        log('Storage cleared');
+      });
+    }
+    
+    function updateStatus() {
+      chrome.storage.local.get(['dataBuffer', 'bufferSize', 'chunkCounter', 'chunksDownloaded'], (result) => {
+        document.getElementById('bufferSize').textContent = result.bufferSize || 0;
+        document.getElementById('bufferFiles').textContent = (result.dataBuffer || []).length;
+        document.getElementById('chunksWritten').textContent = result.chunkCounter || 0;
+        document.getElementById('chunksDownloaded').textContent = result.chunksDownloaded || 0;
+      });
+    }
+    
+    // Initialize
+    updateStatus();
+    log('Real download test initialized');
+  </script>
+</body>
+</html> 
